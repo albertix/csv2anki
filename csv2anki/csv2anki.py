@@ -449,6 +449,56 @@ def read_csv(mid, src_path, tags=True):
     return list(notes)
 
 
+def package_media(media_dir=None, zfile=None):
+
+    def write_media(zfile, media):
+        zfile.writestr('media', json.dumps(media))
+        for i, m in media.items():
+            zfile.write(p_join(media_dir, m), arcname=i)
+
+    media_dir = os.path.abspath(media_dir)
+    if media_dir and os.path.isdir(media_dir):
+        media = dict(((str(i), m)
+                      for i, m
+                      in enumerate(os.listdir('.'))
+                      if os.path.isfile(m)))
+    else:
+        media = dict()
+
+    if isinstance(zfile, zipfile.ZipFile):
+        write_media(zfile, media)
+    else:
+        if not zfile:
+            zpath='default.apkg'
+        elif os.path.isdir(os.path.abspath(zfile)):
+            zpath= p_join(os.path.abspath(zfile), 'default.apkg')
+        else:
+            zpath = zfile
+        zpath = os.path.abspath(zpath)
+        if os.path.commonpath([zpath, media_dir]) == media_dir:
+            zpath = os.path.abspath(p_join(media_dir, '..', 'default.apkg'))
+        with zipfile.ZipFile(zpath, 'w', zipfile.ZIP_DEFLATED) as zfile:
+            write_media(zfile, media)
+
+
+def read_csvs(models, src_path, tags=True):
+    models = list([mid for mid in models.values()])
+    notes = []
+    cards = []
+    for model in models:
+        mod_notes = read_csv(model['id'], src_path=src_path, tags=tags)
+        mod_cards = gen_cards(notes, model)
+        notes.append(mod_notes)
+        cards.append(mod_cards)
+    notes = list(itertools.chain(*notes))
+    cards = list(itertools.chain(*cards))
+    pass
+
+def create_db(notes, models, db_path):
+    pass
+
+
+
 def package(taget_path, deck_name, models_dir, media_dir):
     ''''''
 
