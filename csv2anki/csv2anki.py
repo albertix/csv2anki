@@ -321,7 +321,7 @@ def make_col(models, decks=None, conf=None, tags=None, dconf=None, crt=None):
         'crt': crt,
         'mod': crt * 1000,
         'scm': crt * 1000,
-        'ver': 1,
+        'ver': 11, #第11版
         'dty': 0,
         'usn': 0,
         'ls': 0,
@@ -357,8 +357,9 @@ def guid():
     return g
 
 
-n_id_gen = itertools.count(msstamp())
-c_id_gen = itertools.count(msstamp())
+id_start = msstamp()
+n_id_gen = itertools.count(id_start)
+c_id_gen = itertools.count(id_start)
 
 
 def gen_note(mid, flds, tags=""):
@@ -391,7 +392,7 @@ def gen_note_cards(nid, ords, did=1):
         c_usn = -1
         c_type = 0
         c_queue = 0
-        c_due = nid
+        c_due = nid - id_start + 1
         c_ivl = 0
         c_factor = 0
         c_reps = 0
@@ -405,6 +406,7 @@ def gen_note_cards(nid, ords, did=1):
                       c_usn, c_type, c_queue, c_due, c_ivl,
                       c_factor, c_reps, c_lapses, c_left, c_odue,
                       c_odid, c_flags, c_data))
+
     return cards
 
 
@@ -460,8 +462,8 @@ def package_media(media_dir=None, zfile=None):
     if media_dir and os.path.isdir(media_dir):
         media = dict(((str(i), m)
                       for i, m
-                      in enumerate(os.listdir('.'))
-                      if os.path.isfile(m)))
+                      in enumerate(os.listdir(media_dir))
+                      if os.path.isfile(p_join(media_dir, m))))
     else:
         media = dict()
 
@@ -487,24 +489,138 @@ def read_csvs(models, src_path, tags=True):
     cards = []
     for model in models:
         mod_notes = read_csv(model['id'], src_path=src_path, tags=tags)
-        mod_cards = gen_cards(notes, model)
+        mod_cards = gen_cards(mod_notes, model)
         notes.append(mod_notes)
         cards.append(mod_cards)
     notes = list(itertools.chain(*notes))
     cards = list(itertools.chain(*cards))
-    pass
 
-def create_db(notes, models, db_path):
-    pass
+    return notes, cards
 
 
+NEW_DB = '''
+CREATE TABLE col (
+    id              integer primary key,
+    crt             integer not null,
+    mod             integer not null,
+    scm             integer not null,
+    ver             integer not null,
+    dty             integer not null,
+    usn             integer not null,
+    ls              integer not null,
+    conf            text not null,
+    models          text not null,
+    decks           text not null,
+    dconf           text not null,
+    tags            text not null
+);
+CREATE TABLE notes (
+    id              integer primary key,   /* 0 */
+    guid            text not null,         /* 1 */
+    mid             integer not null,      /* 2 */
+    mod             integer not null,      /* 3 */
+    usn             integer not null,      /* 4 */
+    tags            text not null,         /* 5 */
+    flds            text not null,         /* 6 */
+    sfld            integer not null,      /* 7 */
+    csum            integer not null,      /* 8 */
+    flags           integer not null,      /* 9 */
+    data            text not null          /* 10 */
+);
+CREATE TABLE cards (
+    id              integer primary key,   /* 0 */
+    nid             integer not null,      /* 1 */
+    did             integer not null,      /* 2 */
+    ord             integer not null,      /* 3 */
+    mod             integer not null,      /* 4 */
+    usn             integer not null,      /* 5 */
+    type            integer not null,      /* 6 */
+    queue           integer not null,      /* 7 */
+    due             integer not null,      /* 8 */
+    ivl             integer not null,      /* 9 */
+    factor          integer not null,      /* 10 */
+    reps            integer not null,      /* 11 */
+    lapses          integer not null,      /* 12 */
+    left            integer not null,      /* 13 */
+    odue            integer not null,      /* 14 */
+    odid            integer not null,      /* 15 */
+    flags           integer not null,      /* 16 */
+    data            text not null          /* 17 */
+);
+CREATE TABLE revlog (
+    id              integer primary key,
+    cid             integer not null,
+    usn             integer not null,
+    ease            integer not null,
+    ivl             integer not null,
+    lastIvl         integer not null,
+    factor          integer not null,
+    time            integer not null,
+    type            integer not null
+);
+CREATE TABLE graves (
+    usn             integer not null,
+    oid             integer not null,
+    type            integer not null
+);
+CREATE INDEX ix_notes_usn on notes (usn);
+CREATE INDEX ix_cards_usn on cards (usn);
+CREATE INDEX ix_revlog_usn on revlog (usn);
+CREATE INDEX ix_cards_nid on cards (nid);
+CREATE INDEX ix_cards_sched on cards (did, queue, due);
+CREATE INDEX ix_revlog_cid on revlog (cid);
+CREATE INDEX ix_notes_csum on notes (csum);
+'''
 
-def package(taget_path, deck_name, models_dir, media_dir):
+
+def create_db(col, src_path, db_path):
+    models = col['models']
+    if os.path.isdir(db_path):
+        db_path = p_join(os.path.abspath(db_path), 'collection.anki2')
+
+    if os.path.isfile(db_path):
+        os.remove(db_path)
+
+    conn = sql.connect(db_path)
+
+    cursor = conn.cursor()
+    cursor.executescript(NEW_DB)
+    conn.commit()
+
+    cursor.execute('INSERT INTO col(id,crt,mod,scm,ver,'
+                   'dty,usn,ls,conf,models,'
+                   'decks,dconf,tags)'
+                   ' VALUES (?,?,?,?,?,'
+                   '?,?,?,?,?,'
+                   '?,?,?)',
+                   (col['id'], col['crt'], col['mod'], col['scm'], col['ver'],
+                   col['dty'], col['usn'], col['ls'], json.dumps(col['conf']), json.dumps(col['models']),
+                   json.dumps(col['decks']), json.dumps(col['dconf']), json.dumps(col['tags'])))
+    notes, cards = read_csvs(models, src_path)
+    cursor.executemany("INSERT INTO notes(id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data)"
+                       " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", notes)
+    cursor.executemany("INSERT INTO cards"
+                       "(id,nid,did,ord,mod,"
+                       "usn,type,queue,due,ivl,"
+                       "factor,reps,lapses,left,odue,"
+                       "odid,flags,data)"
+                       " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", cards)
+
+
+    conn.commit()
+    conn.close()
+
+
+def package(taget_path, src_path, temp_dir, media_dir=None, deck_name='default.apkg'):
     ''''''
+    col = make_col_from_dir(src_path, temp_dir)
+    create_db(col, temp_dir, temp_dir)
+    if not media_dir:
+        media_dir = p_join(src_path, 'media')
 
-
-class Packager(object):
-    def __init__(taget_path, deck_name, models_dir, media_dir):
-        self.taget_path = taget_path
-        self.deck_name = deck_name
+    zpath = p_join(os.path.abspath(temp_dir), deck_name)
+    with zipfile.ZipFile(zpath, 'w', zipfile.ZIP_DEFLATED) as zfile:
+        package_media(media_dir=media_dir, zfile=zfile)
+        zfile.write(p_join(temp_dir, 'collection.anki2'), arcname='collection.anki2')
+    shutil.move(zpath, taget_path)
 
