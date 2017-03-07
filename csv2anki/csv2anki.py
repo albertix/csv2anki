@@ -1,13 +1,14 @@
 import zipfile, shutil, itertools
 import sqlite3 as sql
-import json, os, sys, datetime, re, tempfile
+import json, os, datetime, re, tempfile
 import csv, string, random, hashlib
-import pprint
+import click
 
 from os.path import join as p_join
 
 
 def unpack(src_path, unpack_dir):
+    src_path, unpack_dir = os.path.abspath(src_path), os.path.abspath(unpack_dir)
     with zipfile.ZipFile(src_path, 'r') as z:
 
         # unpack media
@@ -22,7 +23,7 @@ def unpack(src_path, unpack_dir):
             with open(media_path, 'wb') as f:
                 f.write(fm)
 
-        # unpack others
+        unpack others
         db = z.read('collection.anki2')
 
         with open(p_join(unpack_dir, 'collection.anki2'), 'w+b') as df:
@@ -35,11 +36,11 @@ def unpack(src_path, unpack_dir):
             models = json.loads(models[0])
 
             # debug
-            debug_models, debug_decks = cursor.execute('SELECT models, decks FROM col').fetchone()
-            with open(p_join(unpack_dir, 'models.json'), 'w') as f:
-                f.write(debug_models)
-            with open(p_join(unpack_dir, 'decks.json'), 'w') as f:
-                f.write(debug_decks)
+            # debug_models, debug_decks = cursor.execute('SELECT models, decks FROM col').fetchone()
+            # with open(p_join(unpack_dir, 'models.json'), 'w') as f:
+            #     f.write(debug_models)
+            # with open(p_join(unpack_dir, 'decks.json'), 'w') as f:
+            #     f.write(debug_decks)
 
             # unpack each model
             for (mid, model) in models.items():
@@ -71,11 +72,8 @@ def unpack(src_path, unpack_dir):
                 # css
                 with open(p_join(model_dir, 'cards.css'), 'w', encoding='utf8', newline='\n') as f:
                     f.write(model['css'])
-
         dbconn.close()
-
-
-# os.remove(p_join(unpack_dir, 'collection.anki2'))
+        os.remove(p_join(unpack_dir, 'collection.anki2'))
 
 
 def timestamp():
@@ -314,7 +312,7 @@ def make_models_from_dirs(dir_paths, temp_dir=None):
 
 
 # make col
-def make_col(models, decks=None, conf=None, tags=None, dconf=None, crt=None):
+def make_col(models, decks=None, conf=None, tags=None, dconf=None, crt=None, name='default'):
     crt = crt if crt else timestamp()
     col = {
         'id': 1,
@@ -327,7 +325,7 @@ def make_col(models, decks=None, conf=None, tags=None, dconf=None, crt=None):
         'ls': 0,
         'conf': conf if conf else make_conf(),
         'models': models,
-        'decks': decks if decks else make_decks(),
+        'decks': decks if decks else make_decks(name=name),
         'dconf': dconf if dconf else make_dconf(),
         'tags': tags if tags else {},
     }
@@ -335,13 +333,13 @@ def make_col(models, decks=None, conf=None, tags=None, dconf=None, crt=None):
 
 
 # without media
-def make_col_from_dir(dir_path, temp_dir=None):
+def make_col_from_dir(dir_path, temp_dir=None, name='default'):
     isdir = lambda p: os.path.isdir(p_join(dir_path, p))
     mod_paths = [p_join(dir_path, mod_path)
                  for mod_path
                  in os.listdir(dir_path)
                  if isdir(mod_path) and mod_path != 'media']
-    models = make_models_from_dirs(mod_paths, temp_dir=temp_dir)
+    models = make_models_from_dirs(mod_paths, temp_dir=temp_dir, name=name)
     col = make_col(models)
     return col
 
@@ -611,16 +609,36 @@ def create_db(col, src_path, db_path):
     conn.close()
 
 
-def package(taget_path, src_path, temp_dir, media_dir=None, deck_name='default.apkg'):
+def package(taget_path, src_path, temp_dir, media_dir=None, deck_name='default'):
     ''''''
-    col = make_col_from_dir(src_path, temp_dir)
+    col = make_col_from_dir(src_path, temp_dir, name=deck_name)
     create_db(col, temp_dir, temp_dir)
     if not media_dir:
         media_dir = p_join(src_path, 'media')
 
-    zpath = p_join(os.path.abspath(temp_dir), deck_name)
+    zpath = p_join(os.path.abspath(temp_dir), deck_name+'.apkg')
     with zipfile.ZipFile(zpath, 'w', zipfile.ZIP_DEFLATED) as zfile:
         package_media(media_dir=media_dir, zfile=zfile)
         zfile.write(p_join(temp_dir, 'collection.anki2'), arcname='collection.anki2')
     shutil.move(zpath, taget_path)
 
+
+@click.group()
+def cli():
+    pass
+
+@cli.command("unpack")
+@click.argument('src_path', help='anki .apkg 文件路径')
+@click.option('-e', '--unpack_dir', help='解压位置', default='.')
+def cli_unpack(src_path, unpack_dir):
+    unpack(src_path, unpack_dir)
+
+@cli.command("package")
+@click.argument('taget_path', help='')
+def cli_package(taget_path, src_path, temp_dir, media_dir, deck_name):
+
+    if os.path.isdir(temp_dir):
+        package(taget_path, src_path, temp_dir, media_dir, deck_name)
+    else:
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            package(taget_path, src_path, tmpdirname, media_dir, deck_name)
