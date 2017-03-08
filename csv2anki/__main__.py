@@ -20,7 +20,7 @@ def cli_unpack(apkg_path, unpack_dir):
 @cli.command("pkg")
 @click.argument('taget_path')
 @click.argument('src_path')
-@click.option('-t', '-temp_dir', help='缓存文件夹', default='.')
+@click.option('-t', '-temp_dir', help='缓存文件夹', default=None)
 @click.option('-m', '-media_dir', help='媒体文件夹', default='.')
 @click.option('-n', '-deck_name', help='牌组名称，若目标位置包含[name].apkg，牌组名为[name]', default='default')
 def cli_package(taget_path, src_path, temp_dir, media_dir, deck_name):

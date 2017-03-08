@@ -79,20 +79,19 @@ def unpack(src_path, unpack_dir):
                                        (mid,)).fetchall()
                 notes = list(map(lambda x: x[0].split('\x1f') + [x[1].strip()], notes))
                 # write to file
-                with open(p_join(model_dir, 'notes.csv'), 'w', encoding='utf8', newline='\n') as f:
+                with open(p_join(model_dir, 'notes.csv'), 'w', encoding='utf8') as f:
                     w = csv.writer(f, dialect='excel-tab')
                     w.writerow(flds_name)
                     w.writerows(notes)
                 # tmpls
                 for tmpl in model['tmpls']:
-                    with open(p_join(model_dir, '{}.txt'.format(tmpl['name'])), 'w', encoding='utf8',
-                              newline='\n') as f:
+                    with open(p_join(model_dir, '{}.txt'.format(tmpl['name'])), 'w', encoding='utf8') as f:
                         f.write(tmpl['qfmt'])
                         f.write('\n<====================>\n')
                         f.write('<====================>\n')
                         f.write(tmpl['afmt'])
                 # css
-                with open(p_join(model_dir, 'cards.css'), 'w', encoding='utf8', newline='\n') as f:
+                with open(p_join(model_dir, 'cards.css'), 'w', encoding='utf8') as f:
                     f.write(model['css'])
         dbconn.close()
         os.remove(p_join(unpack_dir, 'collection.anki2'))
@@ -313,8 +312,8 @@ def make_model_from_dir(dir_path, csv_path=None, tmpl_paths=None,
 
     model = make_model(mid, flds, tmpls, name=name, css=css)
     if temp_dir:
-        with open(p_join(temp_dir, str(mid) + '.csv'), 'w', newline='\n', encoding='utf8') as csv:
-            with open(_csv_path, newline='\n', encoding='utf8') as f:
+        with open(p_join(temp_dir, str(mid) + '.csv'), 'w', encoding='utf8') as csv:
+            with open(_csv_path, encoding='utf8') as f:
                 csv.write(f.read())
     return model
 
