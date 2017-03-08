@@ -1,10 +1,32 @@
-import zipfile, shutil, itertools
+import zipfile
+import shutil
+import itertools
 import sqlite3 as sql
-import json, os, datetime, re, tempfile
-import csv, string, random, hashlib
-import click
+import json
+import os
+import datetime
+import re
+import csv
+import string
+import random
+import hashlib
 
 from os.path import join as p_join
+
+
+def tstamp():
+    return int(datetime.datetime.now().timestamp())
+
+
+def msstamp():
+    return int(datetime.datetime.now().timestamp() * 1000)
+
+
+timestamp = tstamp()
+id_start = msstamp()
+n_id_gen = itertools.count(id_start)
+c_id_gen = itertools.count(id_start)
+m_id_gen = itertools.count(id_start)
 
 
 def unpack(src_path, unpack_dir):
@@ -76,14 +98,6 @@ def unpack(src_path, unpack_dir):
         os.remove(p_join(unpack_dir, 'collection.anki2'))
 
 
-def timestamp():
-    return int(datetime.datetime.now().timestamp())
-
-
-def msstamp():
-    return int(datetime.datetime.now().timestamp() * 1000)
-
-
 def make_conf(curModel=None, curDeck=1, activeDecks=None):
     activeDecks = activeDecks if activeDecks else [curDeck]
     conf = {
@@ -91,7 +105,7 @@ def make_conf(curModel=None, curDeck=1, activeDecks=None):
         'addToCur': True,
         'collapseTime': 1200,
         'curDeck': curDeck,
-        'curModel': curModel if curModel else str(msstamp()),
+        'curModel': curModel if curModel else str(id_start),
         'dueCounts': True,
         'estTimes': True,
         'newBury': True,
@@ -104,8 +118,8 @@ def make_conf(curModel=None, curDeck=1, activeDecks=None):
 
 
 def make_dconf(deck_id=1):
-    return {'{}'.format(deck_id):
-                {'autoplay': True,
+    return {'{}'.format(deck_id):{
+                    'autoplay': True,
                  'id': 1,
                  'lapse': {
                      'delays': [10],
@@ -164,7 +178,7 @@ def make_decks(deck_id=1, name=None, mod=None):
                 0
             ],
             "id": 1,
-            "mod": mod if mod else timestamp(),
+            "mod": mod if mod else timestamp,
             "desc": ""
         }
     }
@@ -249,10 +263,10 @@ def make_model(mid, flds, tmpls, name=None, css=None, mod=None):
         "latexPre": latexPre,
         "latexPost": "\\end{document}",
 
-        "name": name if name else str(msstamp()),
+        "name": name if name else str(id_start),
         "flds": flds,
         "tmpls": tmpls,
-        "mod": mod if mod else timestamp(),
+        "mod": mod if mod else timestamp,
         "type": 0,
         "css": CSS,
     }
@@ -278,7 +292,7 @@ def make_model_from_dir(dir_path, csv_path=None, tmpl_paths=None,
             text = f.read()
         return text
 
-    mid = msstamp()
+    mid = next(m_id_gen)
     _csv_path = csv_path if csv_path else p_join(dir_path, 'notes.csv')
     flds = make_header(_csv_path)
     tmpl_paths = tmpl_paths if tmpl_paths else filter( \
@@ -313,13 +327,13 @@ def make_models_from_dirs(dir_paths, temp_dir=None):
 
 # make col
 def make_col(models, decks=None, conf=None, tags=None, dconf=None, crt=None, name='default'):
-    crt = crt if crt else timestamp()
+    crt = crt if crt else timestamp
     col = {
         'id': 1,
         'crt': crt,
         'mod': crt * 1000,
         'scm': crt * 1000,
-        'ver': 11, #第11版
+        'ver': 11,  # 第11版
         'dty': 0,
         'usn': 0,
         'ls': 0,
@@ -353,11 +367,6 @@ def guid():
         g += chars[x & 63]
         x = x >> 6
     return g
-
-
-id_start = msstamp()
-n_id_gen = itertools.count(id_start)
-c_id_gen = itertools.count(id_start)
 
 
 def gen_note(mid, flds, tags=""):
@@ -450,7 +459,6 @@ def read_csv(mid, src_path, tags=True):
 
 
 def package_media(media_dir=None, zfile=None):
-
     def write_media(zfile, media):
         zfile.writestr('media', json.dumps(media))
         for i, m in media.items():
@@ -469,9 +477,9 @@ def package_media(media_dir=None, zfile=None):
         write_media(zfile, media)
     else:
         if not zfile:
-            zpath='default.apkg'
+            zpath = 'default.apkg'
         elif os.path.isdir(os.path.abspath(zfile)):
-            zpath= p_join(os.path.abspath(zfile), 'default.apkg')
+            zpath = p_join(os.path.abspath(zfile), 'default.apkg')
         else:
             zpath = zfile
         zpath = os.path.abspath(zpath)
@@ -592,8 +600,8 @@ def create_db(col, src_path, db_path):
                    '?,?,?,?,?,'
                    '?,?,?)',
                    (col['id'], col['crt'], col['mod'], col['scm'], col['ver'],
-                   col['dty'], col['usn'], col['ls'], json.dumps(col['conf']), json.dumps(col['models']),
-                   json.dumps(col['decks']), json.dumps(col['dconf']), json.dumps(col['tags'])))
+                    col['dty'], col['usn'], col['ls'], json.dumps(col['conf']), json.dumps(col['models']),
+                    json.dumps(col['decks']), json.dumps(col['dconf']), json.dumps(col['tags'])))
     notes, cards = read_csvs(models, src_path)
     cursor.executemany("INSERT INTO notes(id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data)"
                        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", notes)
@@ -603,7 +611,6 @@ def create_db(col, src_path, db_path):
                        "factor,reps,lapses,left,odue,"
                        "odid,flags,data)"
                        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", cards)
-
 
     conn.commit()
     conn.close()
@@ -616,43 +623,9 @@ def package(taget_path, src_path, temp_dir, media_dir=None, deck_name='default')
     if not media_dir:
         media_dir = p_join(src_path, 'media')
 
-    zpath = p_join(os.path.abspath(temp_dir), deck_name+'.apkg')
+    zpath = p_join(os.path.abspath(temp_dir), deck_name + '.apkg')
     with zipfile.ZipFile(zpath, 'w', zipfile.ZIP_DEFLATED) as zfile:
         package_media(media_dir=media_dir, zfile=zfile)
         zfile.write(p_join(temp_dir, 'collection.anki2'), arcname='collection.anki2')
     shutil.move(zpath, taget_path)
 
-
-@click.group()
-def cli():
-    pass
-
-
-@cli.command("upkg")
-@click.argument('apkg_path', nargs=1)
-@click.option('-e', '--unpack_dir', help='解压位置', default='.')
-def cli_unpack(apkg_path, unpack_dir):
-    """解压缩 apkg 文件"""
-    unpack(apkg_path, unpack_dir)
-
-
-@cli.command("pkg")
-@click.argument('taget_path')
-@click.argument('src_path')
-@click.option('-t', '-temp_dir', help='缓存文件夹', default='.')
-@click.option('-m', '-media_dir', help='媒体文件夹', default='.')
-@click.option('-n', '-deck_name', help='牌组名称，若目标位置包含[name].apkg，牌组名为[name]', default='default')
-def cli_package(taget_path, src_path, temp_dir, media_dir, deck_name):
-    """打包 apkg 文件"""
-    taget_name = os.path.basename(os.path.abspath(taget_path))
-    if deck_name == 'default' and len(taget_name)>5 and taget_name.endswith('.apkg'):
-        deck_name = taget_name[:-5]
-    if os.path.isdir(temp_dir):
-        package(taget_path, src_path, temp_dir, media_dir, deck_name)
-    else:
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            package(taget_path, src_path, tmpdirname, media_dir, deck_name)
-
-
-if __name__ == '__main__':
-    cli()
