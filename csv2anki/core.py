@@ -284,7 +284,7 @@ def make_model(mid, flds, tmpls, name=None, css=None, mod=None):
     return str(mid), model
 
 
-def make_model_from_dir(dir_path, csv_path=None, tmpl_paths=None,
+def make_model_from_dir(dir_path=".", csv_path=None, tmpl_paths=None,
                         css_path=None, name=None, temp_dir=None):
     def read_text(path):
         with open(path, encoding='utf8') as f:
@@ -294,10 +294,14 @@ def make_model_from_dir(dir_path, csv_path=None, tmpl_paths=None,
     mid = next(m_id_gen)
     _csv_path = csv_path if csv_path else p_join(dir_path, 'notes.csv')
     flds = make_header(_csv_path)
-    tmpl_paths = tmpl_paths if tmpl_paths else filter( \
-        lambda p: p.endswith('.txt'), os.listdir(dir_path))
+    tmpl_paths = tmpl_paths if tmpl_paths else\
+        (
+            p_join(dir_path, tmpl_path)
+            for tmpl_path in
+            filter(
+                lambda p: p.endswith('.txt'),
+                os.listdir(dir_path)))
 
-    tmpl_paths = (p_join(dir_path, tmpl_path) for tmpl_path in tmpl_paths)
     _tmpls_dict = {
         os.path.basename(tmpl_path)[:-4]: read_text(tmpl_path)
         for tmpl_path in tmpl_paths
@@ -307,8 +311,13 @@ def make_model_from_dir(dir_path, csv_path=None, tmpl_paths=None,
     if css_path:
         css = read_text(css_path)
     else:
-        _css_path = tuple(filter(lambda p: p.endswith('.css'), os.listdir(dir_path)))
-        css = read_text(p_join(dir_path, _css_path[0])) if _css_path else None
+        _css_path = tuple(
+            p_join(dir_path, tmpl_path)
+            for tmpl_path in
+            filter(
+                lambda p: p.endswith('.css'),
+                os.listdir(dir_path)))
+        css = read_text(_css_path[0]) if _css_path else None
 
     model = make_model(mid, flds, tmpls, name=name, css=css)
     if temp_dir:
@@ -615,9 +624,9 @@ def create_db(col, src_path, db_path):
     conn.close()
 
 
-def package(taget_path, src_path, temp_dir, media_dir=None, deck_name='default'):
+def package(taget_path, src_path, temp_dir, media_dir=None, deck_name='default', col=None):
     ''''''
-    col = make_col_from_dir(src_path, temp_dir, name=deck_name)
+    col = col if col else make_col_from_dir(src_path, temp_dir, name=deck_name)
     create_db(col, temp_dir, temp_dir)
     if not media_dir:
         media_dir = p_join(src_path, 'media')
