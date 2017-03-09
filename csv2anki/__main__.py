@@ -28,7 +28,7 @@ def cli_package(taget_path, src_path, temp_dir, media_dir, deck_name):
     taget_name = os.path.basename(os.path.abspath(taget_path))
     if deck_name == 'default' and len(taget_name) > 5 and taget_name.endswith('.apkg'):
         deck_name = taget_name[:-5]
-    if os.path.isdir(temp_dir):
+    if temp_dir and os.path.isdir(temp_dir):
         csv2anki.package(taget_path, src_path, temp_dir, media_dir, deck_name)
     else:
         with tempfile.TemporaryDirectory() as tmpdirname:
