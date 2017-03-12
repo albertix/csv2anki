@@ -2,6 +2,13 @@
 
 通过读入指定的`.csv`、`.css`等文件，转换为符合Anki标准的`.apkg`文件。
 
+## Class Object 转换
+
+Class:  Model, Collection, Package
+Object: dict, list, tuple
+Inport: csv, txt, css, bit, apkg
+Export: csv, txt, css, bit, apkg
+
 ## Anki简介
 
 
@@ -10,9 +17,10 @@
 
 Anki将数据分为三个层次：记忆库(col)、笔记(note)、记忆字段(field)以及展示用的卡片(card)。
 
-    col - - - - -\
-    |--note- - - -=>card
-       |--field -/
+     /- - - - - - - - - col- - - - -\
+    |--model                         |
+       |--note- - - -=>card<=- deck--|
+          |--field -/
 
 
 记忆库(col)包含全部的配置信息，包括卡片(card)的格式，笔记(note)中记忆字段(field)的个数等。

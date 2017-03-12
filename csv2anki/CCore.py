@@ -8,6 +8,30 @@ import os
 import csv
 import re
 import collections
+import tempfile
+
+
+class ObjectClass(object):
+    __all__ = []
+
+    def as_list(self, items:collections.Iterable=None):
+        items = items if items else self.__all__
+        return list((getattr(self, i) for i in items))
+
+    def as_dict(self, items:collections.Iterable=None):
+        items = items if items else self.__all__
+        return dict(((k, getattr(self, k)) for k in items))
+
+    def from_list(self, values, items:collections.Iterable=None):
+        items = items if items else self.__all__
+        for i, k in enumerate(items):
+            setattr(self, k, values[i])
+    
+    def from_dict(self, values, items:collections.Iterable=None):
+        items = set(items) & self.__all__.keys() if items else self.__all__
+        for k in items & values.keys():
+            setattr(self, k, values[k])
+
 
 def tstamp():
     return int(datetime.datetime.now().timestamp())
@@ -139,7 +163,7 @@ class Collection(object):
             'dty': 0,
             'usn': 0,
             'ls': 0,
-            'conf': conf if conf else Collection.make_conf(),
+            'conf': conf if conf else Collection.make_conf(cur_model=next(iter(models.keys()))),
             'models': models,
             'decks': decks if decks else Collection.make_decks(name=name),
             'dconf': dconf if dconf else Collection.make_dconf(),
@@ -147,7 +171,11 @@ class Collection(object):
         }
         return col
 
-    def __init__(self, models, decks=None, conf=None, tags=None, dconf=None, crt=None, name='default'):
+    def __init__(self, models=None, decks=None, conf=None, tags=None, dconf=None, crt=None, name='default', raw_models=None):
+        if raw_models:
+            self.models = raw_models
+        else:
+            self.models = list([Model(m['tmpls'],) for m in models.values()])
         self.col = Collection.make_col(models, decks=decks, conf=conf, tags=tags, dconf=dconf, crt=crt, name=name)
 
     def to_tuple(self):
@@ -243,10 +271,14 @@ class Model(object):
 
         self.model = model
         self.is_cloze = cloze_flag
-        self.notes = notes
-        self.notes_list = Model.notes_list(model, notes, note_with_tags)
-        self.cards_list = Model.cards_list(model, self.notes_list)
         self.note_with_tags = note_with_tags
+        self.notes = notes
+        self.notes_list = Model.notes_list(self.model, self.notes, self.note_with_tags)
+        self.cards_list = Model.cards_list(self.model, self.notes_list)
+
+    def rebuild(self):
+        self.notes_list = Model.notes_list(self.model, self.notes, self.note_with_tags)
+        self.cards_list = Model.cards_list(self.model, self.notes_list)
 
     def gen_note(mid, note_flds, tags=""):
 
@@ -361,7 +393,7 @@ class Model(object):
             tmpls[0]['did'] = None
         return tmpls
 
-    def gen_flds(flds_list):
+    def gen_flds(flds_list: collections.Iterable):
         flds = list([{
                          "name": name,
                          "media": [],
@@ -393,4 +425,21 @@ class Model(object):
             model = Model(tmpls, flds, notes, mid=mid, css=css, name=name, note_with_tags=note_with_tags)
 
         return model
+
+
+class Package(object):
+
+    def __init__(self,deck_name, models, media, tempdir):
+        self.media = media
+        self.models = dict((str(m.model['id']), m.model) for m in modeles)
+
+        self.notes_list = list(itertools.chain(*(m.notes_list for m in models)))
+        self.cards_list = list(itertools.chain(*(m.cards_list for m in models)))
+
+        self.col = Collection(self.models, name=deck_name)
+        self.tempdir = tempdir
+
+    def save(self, name='default.apkg'):
+        pass
+
 
