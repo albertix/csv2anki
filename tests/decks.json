@@ -1,0 +1,86 @@
+{
+    "1": {
+        "desc": "",
+        "name": "\u9ed8\u8ba4",
+        "extendRev": 50,
+        "usn": 0,
+        "collapsed": false,
+        "newToday": [
+            0,
+            0
+        ],
+        "timeToday": [
+            0,
+            0
+        ],
+        "dyn": 0,
+        "extendNew": 10,
+        "conf": 1,
+        "revToday": [
+            0,
+            0
+        ],
+        "lrnToday": [
+            0,
+            0
+        ],
+        "id": 1,
+        "mod": 1489549181
+    },
+    "1489548939991": {
+        "desc": "",
+        "name": "\u9ed8\u8ba41",
+        "extendRev": 50,
+        "usn": -1,
+        "collapsed": false,
+        "newToday": [
+            0,
+            0
+        ],
+        "timeToday": [
+            0,
+            0
+        ],
+        "dyn": 0,
+        "extendNew": 10,
+        "conf": 1,
+        "revToday": [
+            0,
+            0
+        ],
+        "lrnToday": [
+            0,
+            0
+        ],
+        "id": 1489548939991,
+        "mod": 1489548939
+    },
+    "1489548998388": {
+        "desc": "",
+        "name": "f",
+        "extendRev": 50,
+        "usn": -1,
+        "collapsed": false,
+        "newToday": [
+            0,
+            0
+        ],
+        "timeToday": [
+            0,
+            0
+        ],
+        "dyn": 0,
+        "extendNew": 10,
+        "conf": 1,
+        "revToday": [
+            0,
+            0
+        ],
+        "lrnToday": [
+            0,
+            0
+        ],
+        "id": 1489548998388,
+        "mod": 1489549021
+    }
+}

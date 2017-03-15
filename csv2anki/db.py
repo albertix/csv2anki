@@ -184,6 +184,23 @@ class Conf(Dumpable):
         return self._model.id
 
 
+class Decks(object):
+    def __init__(self, decks=None):
+        if isinstance(decks, list):
+            self.value = decks
+        else:
+            self.value = []
+
+    @staticmethod
+    def from_json(decks_json):
+        decks = Decks(list([deck['id'], deck['name'], deck['mod']
+                           for did, deck in json.loads(decks_json)]))
+
+        return decks
+
+    @staticmethod
+    def to_json():
+
 class Col(Base):
     __tablename__ = 'col'
 
@@ -204,6 +221,11 @@ class Col(Base):
     @hybrid_property
     def conf(self):
         pass
+
+    @hybrid_property
+    def decks(self):
+        decks = json.loads(self._decks)
+        return
 
     @hybrid_property
     def tags(self):
