@@ -30,7 +30,7 @@ class Collection(object):
             for model
             in (json.loads(models_json)).values()]
 
-        decks = 
+        decks =
 
 class Model(object):
 
