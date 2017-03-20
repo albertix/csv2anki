@@ -1,6 +1,9 @@
 import collections
+import csv
+import json
 import os
 import re
+import zipfile
 
 
 def basename(path):
@@ -19,12 +22,35 @@ def text(text_path):
     text_path = os.path.abspath(text_path)
     txt = ''
     if os.path.isfile(text_path):
-        with open(text_path, 'r') as f:
+        with open(text_path, 'r', encoding='utf8') as f:
             txt = f.read()
     return txt
 
 
-class Model(object):
+class Comparable(object):
+    __fields__ = []
+
+    def __repr__(self):
+        return json.dumps([getattr(self, field)
+                           for field in type(self).__fields__])
+
+    def __hash__(self):
+        """
+        !!!
+        注意 在所有fields不再变化时，才能使用
+        :return:
+        """
+        return hash(self.__repr__())
+
+    def __eq__(self, other):
+        return all([getattr(self, field) == getattr(other, field)
+                    for field in type(self).__fields__]
+                   ) if isinstance(other, type(self)) else False
+
+
+class Model(Comparable):
+
+    __fields__ = ['tmpls', 'flds', 'is_cloze', 'css', 'model_name']
 
     CSS = ".card {\n font-family: arial;\n font-size: 20px;\n text-align: center;\n" \
           " color: black;\n background-color: white;\n}\n\n.cloze {\n font-weight: bold;\n color: blue;\n}"
@@ -80,16 +106,35 @@ class Model(object):
         pass
 
 
+class Deck(Comparable):
+    __fields__ = ['deck_name']
+
+    def __init__(self, deck_name):
+        self.deck_name = deck_name
+
+
 class ModelDeck(object):
+    __fields__ = ['notes', 'model', 'deck']
+
     def __init__(self, notes, model, deck):
         self.notes = notes
         self.model = model
         self.deck = deck
 
     @staticmethod
-    def from_csv_file(csv_file, tmpls, css=None):
-        csv_path = os.path.abspath(csv_path)
+    def from_csv_text(csv_text, tmpls, csv_name='', css=None):
+        model_name, _, deck_name = re.findall('^(.*?)(\[(.*)\])?$', csv_name)
+        model_name = model_name if model_name else 'default'
+        deck_name = deck_name if deck_name else 'default'
 
+        reader = csv.reader(csv_text.splitlines(), dialect='excel-tab')
+        flds = next(reader)
+
+        model = Model(tmpls=tmpls, flds=flds, css=css, model_name=model_name)
+        deck = Deck(deck_name)
+
+        notes = list([note for note in reader])
+        return ModelDeck(notes, model, deck)
 
     def to_db(self, conn):
         pass
@@ -104,8 +149,9 @@ class Collection(object):
                'dty', 'usn', 'ls', 'conf', 'models',
                'decks', 'dconf', 'tags')
 
-    def __init__(self):
-        self.model_decks = []
+    def __init__(self, model_decks, media_files):
+        self.model_decks = model_decks if model_decks else []
+        self.media_files = media_files
 
     @staticmethod
     def from_files(model_files, media_files):
@@ -116,11 +162,32 @@ class Collection(object):
         :param media_files:
         :return:
         '''
-
+        model_decks = []
         for csv_files, tmpl_files, css_file in model_files:
             css = text(css_file)
             tmpls = [Model.gen_tmpl(text(tmpl_file),
                                     basename(tmpl_file))
                      for tmpl_file in tmpl_files]
-            csv_texts = [text(csv_file) for csv_file in csv_files]
+            csv_name_texts = [(csv_file, text(csv_file)) for csv_file in csv_files]
 
+            model_decks = [ModelDeck.from_csv_text(csv_text,
+                                                   tmpls=tmpls,
+                                                   csv_name=csv_name,
+                                                   css=css)
+                           for csv_name, csv_text
+                           in csv_name_texts]
+
+        return Collection(model_decks, media_files)
+
+    def to_zip(self, zfile):
+        zfile = zfile if zfile.endswith('.apkg') else "{}.apkg".format(zfile)
+        zpath = os.path.abspath(zfile)
+        if os.path.isdir(zpath):
+            zpath = os.path.join(zpath, 'default.apkg')
+
+        media = {}
+        with zipfile.ZipFile(zpath, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for i, media_file in enumerate(self.media_files):
+                zf.write(media_file, arcname=i)
+                media[str(i)] = os.path.basename(media_file)
+            zf.writestr('media', json.dumps(media))
