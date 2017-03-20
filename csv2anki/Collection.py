@@ -4,6 +4,8 @@ import json
 import os
 import re
 import zipfile
+import tempfile
+import logging
 
 
 def basename(path):
@@ -179,7 +181,14 @@ class Collection(object):
 
         return Collection(model_decks, media_files)
 
+    @property
+    def models(self):
+        models = set()
+        for model_deck in self.model_decks:
+            models.add(model_deck.model)
+
     def to_zip(self, zfile):
+
         zfile = zfile if zfile.endswith('.apkg') else "{}.apkg".format(zfile)
         zpath = os.path.abspath(zfile)
         if os.path.isdir(zpath):
@@ -191,3 +200,10 @@ class Collection(object):
                 zf.write(media_file, arcname=i)
                 media[str(i)] = os.path.basename(media_file)
             zf.writestr('media', json.dumps(media))
+
+            with tempfile.TemporaryDirectory() as tmp_dir_name:
+                db_path = os.path.join(tmp_dir_name, 'collection.anki2')
+
+                ### gen db write to db_path
+
+                zf.write(db_path, arcname='collection.anki2')
