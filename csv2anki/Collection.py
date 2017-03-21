@@ -1,5 +1,6 @@
-import collections
+import copy
 import csv
+import io
 import json
 import os
 import re
@@ -76,6 +77,7 @@ class Model(Comparable):
     def gen_tmpl(tmpl_text, tmpl_name):
         """
         :param tmpl_text:
+        :param tmpl_name:
         :return: tmpl['name'], tmpl['qtmpl'], tmpl['atmpl']
         """
         m = re.fullmatch(r'(.*)(\n[<]={10,}[>])\2\n(.*)',
@@ -92,10 +94,11 @@ class Model(Comparable):
         '''
         :param tmpls: [(qtmpl, atmpl), ...]
         :param flds:
-        :param type:
+        :param is_cloze:
         :param css:
         :param model_name:
         '''
+
         if is_cloze is None:
             tmpls, is_cloze = Model.clozed(tmpls)
         self.tmpls = tmpls
@@ -125,17 +128,19 @@ class ModelDeck(object):
 
     @staticmethod
     def from_csv_text(csv_text, tmpls, csv_name='', css=None):
-        model_name, _, deck_name = re.findall('^(.*?)(\[(.*)\])?$', csv_name)
+        model_name, _, deck_name = re.findall('^(.*?)(\[(.*)\])?$', csv_name)[0]
         model_name = model_name if model_name else 'default'
         deck_name = deck_name if deck_name else 'default'
 
-        reader = csv.reader(csv_text.splitlines(), dialect='excel-tab')
-        flds = next(reader)
+        with io.StringIO(csv_text) as f:
+            reader = csv.reader(f, dialect='excel-tab')
+            flds = next(reader)
 
-        model = Model(tmpls=tmpls, flds=flds, css=css, model_name=model_name)
-        deck = Deck(deck_name)
+            model = Model(tmpls=tmpls, flds=flds, css=css, model_name=model_name)
+            deck = Deck(deck_name)
 
-        notes = list([note for note in reader])
+            notes = list([note for note in reader])
+
         return ModelDeck(notes, model, deck)
 
     def to_db(self, conn):
@@ -170,7 +175,7 @@ class Collection(object):
             tmpls = [Model.gen_tmpl(text(tmpl_file),
                                     basename(tmpl_file))
                      for tmpl_file in tmpl_files]
-            csv_name_texts = [(csv_file, text(csv_file)) for csv_file in csv_files]
+            csv_name_texts = [(basename(csv_file), text(csv_file)) for csv_file in csv_files]
 
             model_decks = [ModelDeck.from_csv_text(csv_text,
                                                    tmpls=tmpls,
@@ -181,21 +186,33 @@ class Collection(object):
 
         return Collection(model_decks, media_files)
 
-    @property
-    def models(self):
-        models = set()
-        for model_deck in self.model_decks:
-            models.add(model_deck.model)
+    def info(self):
+        models = []
+        decks = []
+        model_decks = [copy.copy(model_deck) for model_deck in self.model_decks]
+        # unique models, decks
+        for i, model_deck in enumerate(model_decks):
+            if model_deck.model in models:
+                model_deck.model = models[models.index(model_deck.model)]
+            else:
+                models.append(model_deck.model)
 
-    def to_zip(self, zfile):
+            if model_deck.deck in decks:
+                model_deck.deck = decks[decks.index(model_deck.deck)]
+            else:
+                decks.append(model_deck.deck)
 
-        zfile = zfile if zfile.endswith('.apkg') else "{}.apkg".format(zfile)
-        zpath = os.path.abspath(zfile)
-        if os.path.isdir(zpath):
-            zpath = os.path.join(zpath, 'default.apkg')
+        return model_decks
+
+    def to_zip(self, z_file):
+
+        z_file = z_file if z_file.endswith('.apkg') else "{}.apkg".format(z_file)
+        z_path = os.path.abspath(z_file)
+        if os.path.isdir(z_path):
+            z_path = os.path.join(z_path, 'default.apkg')
 
         media = {}
-        with zipfile.ZipFile(zpath, 'w', zipfile.ZIP_DEFLATED) as zf:
+        with zipfile.ZipFile(z_path, 'w', zipfile.ZIP_DEFLATED) as zf:
             for i, media_file in enumerate(self.media_files):
                 zf.write(media_file, arcname=i)
                 media[str(i)] = os.path.basename(media_file)
@@ -204,6 +221,6 @@ class Collection(object):
             with tempfile.TemporaryDirectory() as tmp_dir_name:
                 db_path = os.path.join(tmp_dir_name, 'collection.anki2')
 
-                ### gen db write to db_path
+                # gen db write to db_path
 
                 zf.write(db_path, arcname='collection.anki2')
