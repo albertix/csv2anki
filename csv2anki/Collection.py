@@ -1,12 +1,18 @@
 import copy
 import csv
+import hashlib
 import io
 import json
 import os
 import re
+import string
 import zipfile
 import tempfile
 import logging
+
+import datetime
+
+import itertools
 
 
 def basename(path):
@@ -90,13 +96,14 @@ class Model(Comparable):
         else:
             return tmpl_name, tmpl_text, ""
 
-    def __init__(self, tmpls, flds, is_cloze=None, css=None, model_name="default"):
+    def __init__(self, tmpls, flds, is_cloze=None, css=None, model_name="default", has_tags=False):
         '''
         :param tmpls: [(qtmpl, atmpl), ...]
         :param flds:
         :param is_cloze:
         :param css:
         :param model_name:
+        :param has_tags:
         '''
 
         if is_cloze is None:
@@ -106,9 +113,65 @@ class Model(Comparable):
         self.is_cloze = is_cloze
         self.css = css if css else Model.CSS
         self.model_name = model_name
+        self.has_tags = has_tags
+        self.mid = None
 
-    def to_json(self):
-        pass
+    @staticmethod
+    def make_obj_flds(flds):
+        flds = list([{
+                         "name": name if not name.endswith(':rtl') else name[:-4],
+                         "media": [],
+                         "sticky": False,
+                         "rtl": False if not name.endswith(":rtl") else True,
+                         "ord": i,
+                         "font": "Arial",
+                         "size": 20
+                     } for i, name in enumerate(flds)])
+        return flds
+
+    @staticmethod
+    def make_obj_req(tmpls):
+        return list([[i, "any", [0]] for i in range(len(tmpls))])
+
+    @staticmethod
+    def make_obj_tmpls(tmpls):
+        # tmpls= [tmpl['name'], tmpl['qtmpl'], tmpl['atmpl']] ...
+        tmpls_obj = []
+        for i, (tmpl_name, qfmt, afmt) in enumerate(tmpls):
+            tmpl = {
+                'afmt': afmt,
+                'bafmt': "",
+                'bqfmt': "",
+                'did': None,
+                'name': tmpl_name,
+                'ord': i,
+                'qfmt': qfmt
+            }
+            tmpls_obj.append(tmpl)
+        return tmpls
+
+    def to_obj(self):
+        model = {
+            "id": self.mid,
+            "vers": [],
+            "tags": [],
+            "did": None,
+            "usn": -1,
+            "sortf": 0,
+            "latexPre": Model.LatexPre,
+            "latexPost": "\\end{document}",
+            "name": self.model_name,
+            "flds": Model.make_obj_flds(self.flds),
+            "tmpls": Model.make_obj_tmpls(self.tmpls),
+            "mod": self.mid * 1000,
+            "type": 0,
+            "css": self.css,
+        }
+        if self.is_cloze:
+            model['type'] = 1
+        else:
+            model['req'] = Model.make_obj_req(model['tmpls'])
+        return model
 
 
 class Deck(Comparable):
@@ -116,6 +179,38 @@ class Deck(Comparable):
 
     def __init__(self, deck_name):
         self.deck_name = deck_name
+        self.did = None
+
+    def to_obj(self):
+        deck = {
+            "name": self.deck_name,
+            "extendRev": 50,
+            "usn": 0,
+            "collapsed": False,
+            "newToday": [
+                0,
+                0
+            ],
+            "timeToday": [
+                0,
+                0
+            ],
+            "dyn": 0,
+            "extendNew": 10,
+            "conf": 1,
+            "revToday": [
+                0,
+                0
+            ],
+            "lrnToday": [
+                0,
+                0
+            ],
+            "id": self.did,
+            "mod": self.did * 1000,
+            "desc": ""
+        }
+        return deck
 
 
 class ModelDeck(object):
@@ -136,19 +231,108 @@ class ModelDeck(object):
             reader = csv.reader(f, dialect='excel-tab')
             flds = next(reader)
 
-            model = Model(tmpls=tmpls, flds=flds, css=css, model_name=model_name)
+            has_tags = False
+            if len(flds) > 1 and flds[-1] == 'tags':
+                flds = flds[:-1]
+                has_tags = True
+
+            model = Model(tmpls=tmpls, flds=flds, css=css, model_name=model_name, has_tags=has_tags)
             deck = Deck(deck_name)
 
             notes = list([note for note in reader])
 
         return ModelDeck(notes, model, deck)
 
-    def to_db(self, conn):
-        pass
+    @staticmethod
+    def make_obj_note(note, tags, mid, nid_gen):
 
+        def guid(n_id):
+            # 64 位
+            chars = string.ascii_letters + string.digits + "!#"
+            g = ""
+            while n_id > 0:
+                g += chars[n_id & 63]
+                n_id = n_id >> 6
+            return g
 
-class Models(object):
-    pass
+        n_id = next(nid_gen)
+        n_guid = guid(n_id)
+        n_mid = mid
+        n_mod = n_id // 1000
+        n_usn = -1
+        n_tags = tags
+        n_flds = '\x1f'.join(note)
+        n_sfld = note[0]
+        n_csum = int(hashlib.sha1(bytes(note[0], 'utf8')).hexdigest()[:8], 16)
+        n_flags = 0
+        n_data = ''
+        return (n_id, n_guid, n_mid,
+                n_mod, n_usn, n_tags,
+                n_flds, n_sfld, n_csum,
+                n_flags, n_data)
+
+    @staticmethod
+    def make_obj_note_cards(nid, ords, cid_gen, cid_start=0, did=1):
+        cards = []
+        for t_ord in ords:
+            c_id = next(cid_gen)
+            c_nid = nid
+            c_did = did
+            c_ord = t_ord
+            c_mod = c_id // 1000
+            c_usn = -1
+            c_type = 0
+            c_queue = 0
+            c_due = nid - cid_start + 1
+            c_ivl = 0
+            c_factor = 0
+            c_reps = 0
+            c_lapses = 0
+            c_left = 0
+            c_odue = 0
+            c_odid = 0
+            c_flags = 0
+            c_data = ''
+            cards.append((c_id, c_nid, c_did, c_ord, c_mod,
+                          c_usn, c_type, c_queue, c_due, c_ivl,
+                          c_factor, c_reps, c_lapses, c_left, c_odue,
+                          c_odid, c_flags, c_data))
+
+        return cards
+
+    @staticmethod
+    def cloze_ords(flds):
+        flds = flds.split('\x1f')
+        ords = set()
+        for fld in flds:
+            for t_ord in re.findall('{{c(\d+)::.+?}}', fld):
+                ords.add(int(t_ord) - 1)
+        if not ords:
+            ords = {0, }
+        return ords
+
+    def to_notes_cards_objs(self, nid_gen, cid_gen, cid_start):
+        if self.model.has_tags:
+            notes = [ModelDeck.make_obj_note(note[:-1], note[:-1], self.model.mid, nid_gen)
+                     for note in self.notes]
+        else:
+            notes = [ModelDeck.make_obj_note(note, '', self.model.mid, nid_gen)
+                     for note in self.notes]
+        if not self.model.is_cloze:
+            ords = tuple(range(len(self.model.tmpls)))
+            cards_list = [ModelDeck.make_obj_note_cards(nid=note[0], ords=ords,
+                                                        cid_gen=cid_gen, cid_start=cid_start,
+                                                        did=self.deck.did)
+                          for note in notes]
+        else:
+            cards_list = [ModelDeck.make_obj_note_cards(nid=note[0],
+                                                        # note[6]: flds
+                                                        ords=ModelDeck.cloze_ords(note[6]),
+                                                        cid_gen=cid_gen, cid_start=cid_start,
+                                                        did=self.deck.did)
+                          for note in notes]
+        cards = itertools.chain(*cards_list)
+        return tuple(notes), tuple(cards)
 
 
 class Collection(object):
@@ -158,7 +342,59 @@ class Collection(object):
 
     def __init__(self, model_decks, media_files):
         self.model_decks = model_decks if model_decks else []
-        self.media_files = media_files
+        self.media_files = media_files if media_files else []
+
+    @staticmethod
+    def make_obj_conf(mid, did=1):
+        conf = {
+            'activeDecks': [did],
+            'addToCur': True,
+            'collapseTime': 1200,
+            'curDeck': did,
+            'curModel': mid,
+            'dueCounts': True,
+            'estTimes': True,
+            'newBury': True,
+            'newSpread': 0,
+            'nextPos': 1,
+            'sortBackwards': False,
+            'sortType': 'noteFld',
+            'timeLim': 0}
+        return conf
+
+    @staticmethod
+    def make_obj_dconf(dconf_id=1):
+        return {'{}'.format(dconf_id): {
+            'autoplay': True,
+            'id': 1,
+            'lapse': {
+                'delays': [10],
+                'leechAction': 0,
+                'leechFails': 8,
+                'minInt': 1,
+                'mult': 0},
+            'maxTaken': 60,
+            'mod': 0,
+            'name': 'Default',
+            'new': {
+                'bury': True,
+                'delays': [1, 10],
+                'initialFactor': 2500,
+                'ints': [1, 4, 7],
+                'order': 1,
+                'perDay': 20,
+                'separate': True},
+            'replayq': True,
+            'rev': {
+                'bury': True,
+                'ease4': 1.3,
+                'fuzz': 0.05,
+                'ivlFct': 1,
+                'maxIvl': 36500,
+                'minSpace': 1,
+                'perDay': 100},
+            'timer': 0,
+            'usn': 0}}
 
     @staticmethod
     def from_files(model_files, media_files):
@@ -186,7 +422,7 @@ class Collection(object):
 
         return Collection(model_decks, media_files)
 
-    def info(self):
+    def info(self, id_start=None):
         models = []
         decks = []
         model_decks = [copy.copy(model_deck) for model_deck in self.model_decks]
@@ -195,14 +431,45 @@ class Collection(object):
             if model_deck.model in models:
                 model_deck.model = models[models.index(model_deck.model)]
             else:
-                models.append(model_deck.model)
+                models.append(copy.copy(model_deck.model))
 
             if model_deck.deck in decks:
                 model_deck.deck = decks[decks.index(model_deck.deck)]
             else:
-                decks.append(model_deck.deck)
+                decks.append(copy.copy(model_deck.deck))
+        decks[0].did = 1
 
-        return model_decks
+        # index models, decks
+        id_start = id_start if id_start else int(datetime.datetime.now().timestamp() * 1000)
+        mid_gen = itertools.count(id_start)
+        did_gen = itertools.count(id_start)
+        nid_gen = itertools.count(id_start)
+        cid_gen = itertools.count(id_start)
+        for m in models:
+            m.mid = next(mid_gen)
+        for d in decks:
+            d.did = next(did_gen)
+
+        all_notes, all_cards = [], []
+        for model_deck in model_decks:
+            notes, cards = model_deck.to_notes_cards_objs(nid_gen, cid_gen, id_start)
+            all_notes.append(notes)
+            all_cards.append(cards)
+
+        all_notes = tuple(itertools.chain(*all_notes))
+        all_cards = tuple(itertools.chain(*all_cards))
+        all_decks = {"{}".format(deck.did): deck.to_obj() for deck in decks}
+        all_models = {"{}".format(model.mid): model.to_obj() for model in models}
+
+        conf = Collection.make_obj_conf(models[0].mid)
+        dconf = Collection.make_obj_dconf()
+        tags = {}
+
+        col = (1, id_start//1000, id_start, id_start, 11,
+               0, 0, 0, json.dumps(conf), json.dumps(all_models),
+               json.dumps(all_decks), json.dumps(dconf), json.dumps(tags))
+
+        # db_staff
 
     def to_zip(self, z_file):
 
