@@ -9,10 +9,11 @@ import string
 import zipfile
 import tempfile
 import logging
-
 import datetime
-
 import itertools
+from .db import create_db
+
+debug = None
 
 
 def basename(path):
@@ -313,7 +314,7 @@ class ModelDeck(object):
 
     def to_notes_cards_objs(self, nid_gen, cid_gen, cid_start):
         if self.model.has_tags:
-            notes = [ModelDeck.make_obj_note(note[:-1], note[:-1], self.model.mid, nid_gen)
+            notes = [ModelDeck.make_obj_note(note[:-1], note[-1], self.model.mid, nid_gen)
                      for note in self.notes]
         else:
             notes = [ModelDeck.make_obj_note(note, '', self.model.mid, nid_gen)
@@ -413,14 +414,40 @@ class Collection(object):
                      for tmpl_file in tmpl_files]
             csv_name_texts = [(basename(csv_file), text(csv_file)) for csv_file in csv_files]
 
-            model_decks = [ModelDeck.from_csv_text(csv_text,
+            model_decks.append([ModelDeck.from_csv_text(csv_text,
                                                    tmpls=tmpls,
                                                    csv_name=csv_name,
                                                    css=css)
-                           for csv_name, csv_text
-                           in csv_name_texts]
+                                for csv_name, csv_text
+                                in csv_name_texts])
+
+        model_decks = list(itertools.chain(*model_decks))
 
         return Collection(model_decks, media_files)
+
+    @property
+    def models(self):
+        '''
+        !!! READ ONLY !!!
+        :return:
+        '''
+        models = []
+        for model_deck in self.model_decks:
+            if model_deck.model not in models:
+                models.append(copy.deepcopy(model_deck.model))
+        return models
+
+    @property
+    def decks(self):
+        '''
+        !!! READ ONLY !!!
+        :return:
+        '''
+        decks = []
+        for model_deck in self.model_decks:
+            if model_deck.deck not in decks:
+                decks.append(copy.deepcopy(model_deck.deck))
+        return decks
 
     def info(self, id_start=None):
         models = []
@@ -431,13 +458,16 @@ class Collection(object):
             if model_deck.model in models:
                 model_deck.model = models[models.index(model_deck.model)]
             else:
-                models.append(copy.copy(model_deck.model))
+                new_model = copy.copy(model_deck.model)
+                models.append(new_model)
+                model_deck.model = new_model
 
             if model_deck.deck in decks:
                 model_deck.deck = decks[decks.index(model_deck.deck)]
             else:
-                decks.append(copy.copy(model_deck.deck))
-        decks[0].did = 1
+                new_deck = copy.copy(model_deck.deck)
+                decks.append(new_deck)
+                model_deck.deck = new_deck
 
         # index models, decks
         id_start = id_start if id_start else int(datetime.datetime.now().timestamp() * 1000)
@@ -449,6 +479,8 @@ class Collection(object):
             m.mid = next(mid_gen)
         for d in decks:
             d.did = next(did_gen)
+
+        decks[0].did = 1
 
         all_notes, all_cards = [], []
         for model_deck in model_decks:
@@ -469,7 +501,8 @@ class Collection(object):
                0, 0, 0, json.dumps(conf), json.dumps(all_models),
                json.dumps(all_decks), json.dumps(dconf), json.dumps(tags))
 
-        # db_staff
+        # self.debug = [decks, models, model_decks]
+        return col, all_notes, all_cards
 
     def to_zip(self, z_file):
 
@@ -485,9 +518,12 @@ class Collection(object):
                 media[str(i)] = os.path.basename(media_file)
             zf.writestr('media', json.dumps(media))
 
+            test_db_path = r'G:\playground\csv2anki\csv2anki\test'
             with tempfile.TemporaryDirectory() as tmp_dir_name:
-                db_path = os.path.join(tmp_dir_name, 'collection.anki2')
-
+                db_path = os.path.join(test_db_path, 'collection.anki2')
+                print(db_path)
                 # gen db write to db_path
+                col, notes, cards = self.info()
+                create_db(col, notes, cards, db_path)
 
                 zf.write(db_path, arcname='collection.anki2')
