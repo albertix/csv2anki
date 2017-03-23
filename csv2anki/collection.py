@@ -528,5 +528,5 @@ class Collection(object):
                 create_db(col, notes, cards, db_path)
 
                 zf.write(db_path, arcname='collection.anki2')
-            
+
             os.remove(f.name)
