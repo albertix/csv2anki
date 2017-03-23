@@ -1,29 +1,74 @@
+import os
+from csv2anki.collection import Collection
 import click
 import sys
 
+import itertools
 
-def split_models(argv):
-    models = []
+import collections
+
+
+def split_argv(argv):
+    args = []
     for i in argv:
-        if i == '-M' or i == '--Model':
-            model = []
-            models.append(model)
+        if i in ['-S', '--Save', '--save']:
+            arg = ['save']
+            args.append(arg)
+        elif i in ['-E', '--Extract', '--extract']:
+            arg = ['extract']
+            args.append(arg)
+        elif i in ['--media']:
+            arg = ['media']
+            args.append(arg)
+        elif i in ['-M', '--Model', '--model']:
+            arg = ['model']
+            args.append(arg)
+        elif i in ['-A', '--Anki', '--anki']:
+            arg = ['anki']
+            args.append(arg)
         else:
-            models[-1].append(i)
+            args[-1].append(i)
 
-    models = [format_model(model) for model in models]
-    return models
+    model_decks = [format_model(arg[1:]) for arg in args if arg[0] == 'model']
+    ankis = [arg[1:] for arg in args if arg[0] == 'anki']
+    taget = next(iter(arg[1] for arg in args if arg[0] == 'save'), None)
+    extract = next(iter(arg[1] for arg in args if arg[0] == 'extract'), None)
+    media = [arg[1:] for arg in args if arg[0] == 'media']
+    media = list(itertools.chain(*media))
+
+    def walk_list(l):
+        paths = []
+        for il in l:
+            if not il:
+                paths.append(None)
+            elif isinstance(il, (list, tuple)):
+                paths.append(walk_list(il))
+            else:
+                m_path = os.path.abspath(il)
+                if os.path.isfile(m_path):
+                    paths.append(m_path)
+                elif os.path.isdir(m_path):
+                    for item in os.listdir(m_path):
+                        item = os.path.join(m_path, item)
+                        if os.path.isfile(item):
+                            paths.append(item)
+        return paths
+
+    model_decks = walk_list(model_decks)
+    ankis = walk_list(ankis)
+
+    media_path = walk_list(media)
+
+    return model_decks, ankis, taget, extract, media_path
 
 
 def format_model(argv):
-    print(argv)
     csv = []
     tmpl = []
     css = None
     argv = iter(argv)
     i = next(argv, None)
     while i:
-        print(i)
         if i == '--csv' or i == '-c':
             ni = next(argv, None)
             if ni is None or ni[0] == '-':
@@ -60,4 +105,6 @@ def format_model(argv):
 
 
 if __name__ == '__main__':
-    print(split_models(sys.argv[1:]))
+    model_decks, ankis, taget, extract, media_path = split_argv(sys.argv[1:])
+    col = Collection.from_files(model_decks, media_path)
+    col.to_zip(taget)

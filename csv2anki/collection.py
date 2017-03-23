@@ -519,11 +519,14 @@ class Collection(object):
             zf.writestr('media', json.dumps(media))
 
             test_db_path = r'G:\playground\csv2anki\csv2anki\test'
-            with tempfile.TemporaryDirectory() as tmp_dir_name:
-                db_path = os.path.join(test_db_path, 'collection.anki2')
+            with tempfile.NamedTemporaryFile(delete=False) as f:
+                # db_path = os.path.join(test_db_path, 'collection.anki2')
+                db_path = f.name
                 print(db_path)
                 # gen db write to db_path
                 col, notes, cards = self.info()
                 create_db(col, notes, cards, db_path)
 
                 zf.write(db_path, arcname='collection.anki2')
+            
+            os.remove(f.name)
