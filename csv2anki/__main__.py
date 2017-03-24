@@ -105,6 +105,6 @@ def format_model(argv):
 
 
 if __name__ == '__main__':
-    model_decks, ankis, taget, extract, media_path = split_argv(sys.argv[1:])
-    col = Collection.from_files(model_decks, media_path)
-    col.to_zip(taget)
+    m_model_decks, m_ankis, m_taget, m_extract, m_media_path = split_argv(sys.argv[1:])
+    col = Collection.from_files(m_model_decks, m_media_path)
+    col.to_zip(m_taget)

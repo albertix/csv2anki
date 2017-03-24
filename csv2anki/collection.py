@@ -76,9 +76,16 @@ class Model(Comparable):
     @staticmethod
     def clozed(tmpls):
         for i, tmpl in enumerate(tmpls):
-            if Model.is_cloze(tmpl[0]) and Model.is_cloze(tmpl[1]):
+            if Model.is_cloze(tmpl[1]) and Model.is_cloze(tmpl[2]):
                 return [tmpl], True
         return tmpls, False
+
+    @staticmethod
+    def gen_tmpls(tmpl_paths):
+        tmpls = [Model.gen_tmpl(text(tmpl_path),
+                                basename(tmpl_path))
+                 for tmpl_path in tmpl_paths]
+        return list(tmpls)
 
     @staticmethod
     def gen_tmpl(tmpl_text, tmpl_name):
@@ -99,7 +106,7 @@ class Model(Comparable):
 
     def __init__(self, tmpls, flds, is_cloze=None, css=None, model_name="default", has_tags=False):
         '''
-        :param tmpls: [(qtmpl, atmpl), ...]
+        :param tmpls: [(name, qtmpl, atmpl), ...]
         :param flds:
         :param is_cloze:
         :param css:
@@ -164,7 +171,7 @@ class Model(Comparable):
             "name": self.model_name,
             "flds": Model.make_obj_flds(self.flds),
             "tmpls": Model.make_obj_tmpls(self.tmpls),
-            "mod": self.mid * 1000,
+            "mod": self.mid,
             "type": 0,
             "css": self.css,
         }
@@ -208,7 +215,7 @@ class Deck(Comparable):
                 0
             ],
             "id": self.did,
-            "mod": self.did * 1000,
+            "mod": self.did // 1000,
             "desc": ""
         }
         return deck
@@ -409,9 +416,7 @@ class Collection(object):
         model_decks = []
         for csv_files, tmpl_files, css_file in model_files:
             css = text(css_file)
-            tmpls = [Model.gen_tmpl(text(tmpl_file),
-                                    basename(tmpl_file))
-                     for tmpl_file in tmpl_files]
+            tmpls = Model.gen_tmpls(tmpl_files)
             csv_name_texts = [(basename(csv_file), text(csv_file)) for csv_file in csv_files]
 
             model_decks.append([ModelDeck.from_csv_text(csv_text,
