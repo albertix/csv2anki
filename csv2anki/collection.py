@@ -397,6 +397,7 @@ class Collection(object):
     def __init__(self, model_decks, media_files, temp_dir=None):
         self.model_decks = model_decks if model_decks else []
         self.media_files = media_files if media_files else []
+        self.temp_dir = temp_dir
 
     @staticmethod
     def make_obj_conf(mid, did=1):
