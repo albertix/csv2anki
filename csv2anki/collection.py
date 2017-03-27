@@ -123,14 +123,14 @@ class Model(Comparable):
             return tmpl_name, tmpl_text, ""
 
     def __init__(self, tmpls, flds, is_cloze=None, css=None, model_name="default", has_tags=False):
-        '''
-        :param tmpls: [(name, qtmpl, atmpl), ...]
-        :param flds:
-        :param is_cloze:
-        :param css:
-        :param model_name:
-        :param has_tags:
-        '''
+        """
+        :param tmpls: [(name, q_tmpl, a_tmpl), ...]
+        :param flds: [fld ...]
+        :param is_cloze: False as Default
+        :param css: CSS
+        :param model_name: default as Default
+        :param has_tags: True as Default
+        """
 
         if is_cloze is None:
             tmpls, is_cloze = Model.clozed(tmpls)
@@ -300,13 +300,13 @@ class ModelDeck(object):
     @staticmethod
     def make_obj_note(note, tags, mid, nid_gen):
 
-        def guid(n_id):
+        def guid(nn_id):
             # 64 位
             chars = string.ascii_letters + string.digits + "!#"
             g = ""
-            while n_id > 0:
-                g += chars[n_id & 63]
-                n_id = n_id >> 6
+            while nn_id > 0:
+                g += chars[nn_id & 63]
+                nn_id >>= 6
             return g
 
         n_id = next(nid_gen)
@@ -390,9 +390,9 @@ class ModelDeck(object):
 
 
 class Collection(object):
-    __all__ = ('id', 'crt', 'mod', 'scm', 'ver',
+    __all__ = ['id', 'crt', 'mod', 'scm', 'ver',
                'dty', 'usn', 'ls', 'conf', 'models',
-               'decks', 'dconf', 'tags')
+               'decks', 'dconf', 'tags']
 
     def __init__(self, model_decks, media_files, temp_dir = None):
         self.model_decks = model_decks if model_decks else []
@@ -452,13 +452,13 @@ class Collection(object):
 
     @staticmethod
     def from_files(model_files, media_files):
-        '''
+        """
         :param model_files: [[csv_files, tmpl_files, css_file] ...]
                 csv_files  ( model_name[deck_name].csv ...)
                 tmpl_files ( tmpl_name.txt ...)
         :param media_files:
         :return:
-        '''
+        """
         model_decks = []
         for csv_files, tmpl_files, css_file in model_files:
             css = text(css_file)
@@ -466,9 +466,9 @@ class Collection(object):
             csv_name_texts = [(basename(csv_file), text(csv_file)) for csv_file in csv_files]
 
             model_decks.append([ModelDeck.from_csv_text(csv_text,
-                                                   tmpls=tmpls,
-                                                   csv_name=csv_name,
-                                                   css=css)
+                                                        tmpls=tmpls,
+                                                        csv_name=csv_name,
+                                                        css=css)
                                 for csv_name, csv_text
                                 in csv_name_texts])
 
@@ -491,14 +491,12 @@ class Collection(object):
     def from_zip(path):
         path = os.path.abspath(path)
 
-
-
     @property
     def models(self):
-        '''
+        """
         !!! READ ONLY !!!
         :return:
-        '''
+        """
         models = []
         for model_deck in self.model_decks:
             if model_deck.model not in models:
@@ -507,10 +505,10 @@ class Collection(object):
 
     @property
     def decks(self):
-        '''
+        """
         !!! READ ONLY !!!
         :return:
-        '''
+        """
         decks = []
         for model_deck in self.model_decks:
             if model_deck.deck not in decks:
@@ -586,7 +584,6 @@ class Collection(object):
                 media[str(i)] = os.path.basename(media_file)
             zf.writestr('media', json.dumps(media))
 
-            test_db_path = r'G:\playground\csv2anki\csv2anki\test'
             with tempfile.NamedTemporaryFile(delete=False) as f:
                 # db_path = os.path.join(test_db_path, 'collection.anki2')
                 db_path = f.name
