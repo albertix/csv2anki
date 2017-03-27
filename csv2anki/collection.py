@@ -390,11 +390,11 @@ class ModelDeck(object):
 
 
 class Collection(object):
-    __all__ = ['id', 'crt', 'mod', 'scm', 'ver',
-               'dty', 'usn', 'ls', 'conf', 'models',
-               'decks', 'dconf', 'tags']
+    __all__ = tuple(('id', 'crt', 'mod', 'scm', 'ver',
+                     'dty', 'usn', 'ls', 'conf', 'models',
+                     'decks', 'dconf', 'tags'))
 
-    def __init__(self, model_decks, media_files, temp_dir = None):
+    def __init__(self, model_decks, media_files, temp_dir=None):
         self.model_decks = model_decks if model_decks else []
         self.media_files = media_files if media_files else []
 
