@@ -70,6 +70,24 @@ class Model(Comparable):
                "\\setlength{\\parindent}{0in}\n\\begin{document}\n"
 
     @staticmethod
+    def from_obj(model_obj):
+        tmpls = Model.gen_tmpls_from_obj(model_obj["tmpls"])
+        flds = Model.gen_flds_from_obj(model_obj["flds"])
+        return Model(tmpls, flds,
+                     is_cloze=(model_obj["type"] == 1),
+                     css=model_obj["css"],
+                     model_name=model_obj["name"])
+
+    @staticmethod
+    def gen_tmpl_from_obj(tmpl_obj):
+        return tmpl_obj["name"], tmpl_obj['qfmt'], tmpl_obj['qfmt']
+
+    @staticmethod
+    def gen_tmpls_from_obj(tmpls_obj):
+        tmpls_obj = sorted(tmpls_obj, key=lambda x: x['ord'])
+        return list(Model.gen_tmpls_from_obj(tmpl) for tmpl in tmpls_obj)
+
+    @staticmethod
     def is_cloze(tmpl_text):
         return True if re.match('{{cloze:[^}]+}}', tmpl_text) else False
 
@@ -123,6 +141,13 @@ class Model(Comparable):
         self.model_name = model_name
         self.has_tags = has_tags
         self.mid = None
+
+    @staticmethod
+    def gen_flds_from_obj(flds_obj):
+        flds_obj = sorted(flds_obj, key=lambda x: x['ord'])
+        flds = [name["name"] if not name["rtl"] else name["name"]+':rtl'
+                for name in flds_obj]
+        return flds
 
     @staticmethod
     def make_obj_flds(flds):
@@ -189,6 +214,10 @@ class Deck(Comparable):
         self.deck_name = deck_name
         self.did = None
 
+    @staticmethod
+    def from_obj(deck_obj):
+        return Deck(deck_obj['name'])
+
     def to_obj(self):
         deck = {
             "name": self.deck_name,
@@ -228,6 +257,23 @@ class ModelDeck(object):
         self.notes = notes
         self.model = model
         self.deck = deck
+
+    @staticmethod
+    def from_db(conn, mid, did, col_models_decks_obj):
+        model = Model.from_obj(col_models_decks_obj[0][str(mid)])
+        deck = Deck.from_obj(col_models_decks_obj[1][str(did)])
+
+        with conn.cursor() as cursor:
+            note_objs = cursor.execute('SELECT notes.flds, notes.tags FROM cards, notes'
+                                       ' WHERE cards.nid = notes.id '
+                                       '        and notes.mid = ? '
+                                       '        and cards.did = ?',
+                                       (mid, did)).fetchall()
+
+            notes = list(note_obj[0].split('\x1f') + [note_objs[1]]
+                         for note_obj in note_objs)
+
+        return ModelDeck(notes, model, deck)
 
     @staticmethod
     def from_csv_text(csv_text, tmpls, csv_name='', css=None):
@@ -348,7 +394,7 @@ class Collection(object):
                'dty', 'usn', 'ls', 'conf', 'models',
                'decks', 'dconf', 'tags')
 
-    def __init__(self, model_decks, media_files):
+    def __init__(self, model_decks, media_files, temp_dir = None):
         self.model_decks = model_decks if model_decks else []
         self.media_files = media_files if media_files else []
 
@@ -429,6 +475,23 @@ class Collection(object):
         model_decks = list(itertools.chain(*model_decks))
 
         return Collection(model_decks, media_files)
+
+    @staticmethod
+    def gen_model_decks_from_db(conn):
+        cursor = conn.cursor()
+        col_models_decks_obj = cursor.execute('select models, decks from col').fetchone()
+        mid_dids = cursor.execute('SELECT DISTINCT mid, did'
+                                  ' FROM cards, notes'
+                                  ' WHERE cards.nid = notes.id').fetchall()
+        model_decks = [ModelDeck.from_db(conn, mid, did, col_models_decks_obj)
+                       for mid, did in mid_dids]
+        return list(model_decks)
+
+    @staticmethod
+    def from_zip(path):
+        path = os.path.abspath(path)
+
+
 
     @property
     def models(self):
