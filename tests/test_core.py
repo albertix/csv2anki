@@ -26,15 +26,16 @@ def test_model():
     deck = Deck('测试')
     model_deck = ModelDeck([['a', 'b'], ['c', 'd']], model, deck)
     model_deck1 = ModelDeck.from_csv_text('正面\t背面\na\tb\nc\td\n', [('卡片1', "{{正面}}", "{{背面}}")], '[测试]')
-    assert model_deck.model == model_deck1.model
-    assert model_deck.deck == model_deck1.deck
-    assert model_deck.notes == model_deck1.notes
+    assert model_deck == model_deck1
 
 
-def test_model():
-    model = Model([('卡片1', "{{正面}}", "{{背面}}")], ['正面', '背面'])
+def test_model_deck():
+    model = Model([('卡片1', "{{正面}}", "{{背面}}")], ['正面', '背面'], model_name="aaa")
     deck = Deck('测试')
     model_deck = ModelDeck([['a', 'b'], ['c', 'd']], model, deck)
+    txt = model_deck.to_csv_text()
+    model_deck1 = ModelDeck.from_csv_text(txt, [('卡片1', "{{正面}}", "{{背面}}")], csv_name="aaa[测试]")
+    assert model_deck == model_deck1
 
 
 def test_model_make_obj_flds():

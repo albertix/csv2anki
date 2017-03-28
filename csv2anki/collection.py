@@ -11,7 +11,10 @@ import tempfile
 import logging
 import datetime
 import itertools
-from .db import create_db
+
+import sqlite3
+
+from csv2anki.db import create_db
 
 debug = None
 
@@ -80,12 +83,12 @@ class Model(Comparable):
 
     @staticmethod
     def gen_tmpl_from_obj(tmpl_obj):
-        return tmpl_obj["name"], tmpl_obj['qfmt'], tmpl_obj['qfmt']
+        return tmpl_obj["name"], tmpl_obj['qfmt'], tmpl_obj['afmt']
 
     @staticmethod
     def gen_tmpls_from_obj(tmpls_obj):
         tmpls_obj = sorted(tmpls_obj, key=lambda x: x['ord'])
-        return list(Model.gen_tmpls_from_obj(tmpl) for tmpl in tmpls_obj)
+        return list(Model.gen_tmpl_from_obj(tmpl) for tmpl in tmpls_obj)
 
     @staticmethod
     def is_cloze(tmpl_text):
@@ -210,7 +213,7 @@ class Model(Comparable):
                 'qfmt': qfmt
             }
             tmpls_obj.append(tmpl)
-        return tmpls
+        return tmpls_obj
 
     def to_obj(self):
         model = {
@@ -287,6 +290,14 @@ class ModelDeck(object):
         self.model = model
         self.deck = deck
 
+    def __eq__(self, other):
+        if isinstance(other, type(self)):
+            return self.model == other.model\
+                   and self.deck == other.model\
+                   and self.notes == other.notes
+        else:
+            return False
+
     @staticmethod
     def from_db(conn, mid, did, col_models_decks_obj):
         model = Model.from_obj(col_models_decks_obj[0][str(mid)])
@@ -317,6 +328,13 @@ class ModelDeck(object):
 
     @staticmethod
     def from_csv_text(csv_text, tmpls, csv_name='', css=None):
+        """
+        :param csv_text: 
+        :param tmpls: 
+        :param csv_name: model_name[deck_name] without .csv
+        :param css: 
+        :return: 
+        """
         model_name, _, deck_name = re.findall('^(.*?)(\[(.*)\])?$', csv_name)[0]
         model_name = model_name if model_name else 'default'
         deck_name = deck_name if deck_name else 'default'
@@ -540,9 +558,11 @@ class Collection(object):
     def gen_model_decks_from_db(conn):
         cursor = conn.cursor()
         col_models_decks_obj = cursor.execute('select models, decks from col').fetchone()
+        col_models_decks_obj = (json.loads(col_models_decks_obj[0]), json.loads(col_models_decks_obj[1]))
         mid_dids = cursor.execute('SELECT DISTINCT mid, did'
                                   ' FROM cards, notes'
                                   ' WHERE cards.nid = notes.id').fetchall()
+        # debug.append([conn, col_models_decks_obj, mid_dids])
         model_decks = [ModelDeck.from_db(conn, mid, did, col_models_decks_obj)
                        for mid, did in mid_dids]
         return list(model_decks)
@@ -550,6 +570,14 @@ class Collection(object):
     @staticmethod
     def from_zip(path):
         path = os.path.abspath(path)
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            with zipfile.ZipFile(path) as anki_zip:
+                with anki_zip.open('collection.anki2') as col_file:
+                    f.write(col_file.read())
+            with sqlite3.connect(f.name) as dbconn:
+                model_decks = Collection.gen_model_decks_from_db(dbconn)
+        os.remove(f.name)
+        return Collection(model_decks, None)
 
     @property
     def models(self):
