@@ -90,7 +90,7 @@ def format_model(argv):
         elif i == '--css' or i == '-s':
             ni = next(argv, None)
             if ni is None or ni[0] == '-':
-                print('usage: --tmpl tmpl ...')
+                print('usage: --css css ...')
                 raise SystemError()
             css = ni
             i = next(argv, None)
@@ -108,3 +108,8 @@ if __name__ == '__main__':
     m_model_decks, m_ankis, m_taget, m_extract, m_media_path = split_argv(sys.argv[1:])
     col = Collection.from_files(m_model_decks, m_media_path)
     col.to_zip(m_taget)
+
+    # if m_extract:
+    #     col.to_files(m_extract)
+
+

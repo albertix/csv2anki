@@ -100,8 +100,14 @@ class Model(Comparable):
 
     @staticmethod
     def gen_tmpls(tmpl_paths):
+
+        def b_name(path):
+            temp_name = basename(path)
+            i = temp_name.rfind('[')
+            return temp_name if i == -1 or i == 0 else temp_name[:i]
+
         tmpls = [Model.gen_tmpl(text(tmpl_path),
-                                basename(tmpl_path))
+                                b_name(tmpl_path))
                  for tmpl_path in tmpl_paths]
         return list(tmpls)
 
@@ -165,6 +171,29 @@ class Model(Comparable):
     @staticmethod
     def make_obj_req(tmpls):
         return list([[i, "any", [0]] for i in range(len(tmpls))])
+
+    @staticmethod
+    def make_txt_tmpls(model):
+        """
+        :param model: 
+        :return: [[name, fmt] ...] name = tmpl_name[model_name].txt
+        """
+        tmpls = []
+        for tmpl_name, qfmt, afmt in model.tmpls:
+            name = "{tmpl_name}[{model_name}].txt".\
+                format(tmpl_name=tmpl_name, model_name=model.model_name)
+            fmt = """{qfmt}\n<====================>\n<====================>\n{afmt}"""\
+                .format(qfmt=qfmt, afmt=afmt)
+            tmpls.append([name, fmt])
+        return tmpls
+
+    def to_tmpls_css_txt(self):
+        """
+        :return: [[[name, fmt] ...], css] name = tmpl_name[model_name].txt
+        """
+        tmpls = Model.make_txt_tmpls(self)
+        css = self.css
+        return tmpls, css
 
     @staticmethod
     def make_obj_tmpls(tmpls):
@@ -274,6 +303,17 @@ class ModelDeck(object):
                          for note_obj in note_objs)
 
         return ModelDeck(notes, model, deck)
+
+    def to_csv_text(self):
+        txt = io.StringIO(newline=None)
+        w = csv.writer(txt, dialect='excel-tab')
+        if self.model.has_tags:
+            w.writerow(self.model.flds + ['tags'])
+        else:
+            w.writerow(self.model.flds)
+        w.writerows(self.notes)
+
+        return txt.getvalue()
 
     @staticmethod
     def from_csv_text(csv_text, tmpls, csv_name='', css=None):
@@ -394,10 +434,9 @@ class Collection(object):
                      'dty', 'usn', 'ls', 'conf', 'models',
                      'decks', 'dconf', 'tags'))
 
-    def __init__(self, model_decks, media_files, temp_dir=None):
+    def __init__(self, model_decks, media_files):
         self.model_decks = model_decks if model_decks else []
         self.media_files = media_files if media_files else []
-        self.temp_dir = temp_dir
 
     @staticmethod
     def make_obj_conf(mid, did=1):
@@ -451,13 +490,33 @@ class Collection(object):
             'timer': 0,
             'usn': 0}}
 
+    def to_files(self, dir_path):
+        dir_path = os.path.abspath(dir_path)
+        for model in self.models:
+            tmpls, css = model.to_tmpls_css_txt()
+            css_path = os.path.join(dir_path, "{}.css".format(model.model_name))
+            with open(css_path, 'w', encoding='utf8') as f:
+                f.write(css)
+            for model_name, fmt in tmpls:
+                tmpl_path = os.path.join(dir_path, model_name)
+                with open(tmpl_path, 'w', encoding='utf8') as f:
+                    f.write(fmt)
+
+        for deck_model in self.model_decks:
+            csv_path = os.path.join(dir_path,
+                                    "{model_name}[{deck_name}].csv"
+                                    .format(model_name=deck_model.model.model_name,
+                                            deck_name=deck_model.deck.deck_name))
+            with open(csv_path, 'w', encoding='utf8') as f:
+                f.write(deck_model.to_csv_text())
+
     @staticmethod
     def from_files(model_files, media_files):
         """
-        :param model_files: [[csv_files, tmpl_files, css_file] ...]
+        :param model_files: [[csv_files, tmpl_files, css_file], ...]
                 csv_files  ( model_name[deck_name].csv ...)
                 tmpl_files ( tmpl_name.txt ...)
-        :param media_files:
+        :param media_files: [meida_file_path | anki.apkg, ...]
         :return:
         """
         model_decks = []
