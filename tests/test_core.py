@@ -1,3 +1,4 @@
+import itertools
 import pytest
 from csv2anki.collection import Collection, Model, ModelDeck, Deck, text
 import os
@@ -12,12 +13,13 @@ tmpl_text = '''{{正面}}
 <===============>
 {{背面}}'''
 
-csv_text = '''文字	text	tags
-啊	e	1
-吧	b	1 2
-处	a	2
-啊啊 啊
-c		'''
+csv_text = '''正面\t背面:rtl\ttags
+啊\te\t1
+吧\tb\t1 2
+处\ta\t2
+啊{{c1::1}}{{c3::2}}\ta\t
+c\t\t
+'''
 
 
 def test_model(tmpdir):
@@ -42,8 +44,22 @@ def test_model(tmpdir):
     # gen_tmpls_from_obj
     assert Model.gen_tmpls_from_obj(model1.to_obj()['tmpls']) == model1.tmpls
     # gen flds from obj
+    obj_flds = [{'font': 'Arial',
+                'media': [],
+                'name': '正面',
+                'ord': 0,
+                'rtl': False,
+                'size': 20,
+                'sticky': False},
+               {'font': 'Arial',
+                'media': [],
+                'name': '背面',
+                'ord': 1,
+                'rtl': True,
+                'size': 20,
+                'sticky': False}]
     assert Model.gen_flds_from_obj(model1.to_obj()['flds']) == model1.flds
-    assert Model.make_obj_flds(model1.flds) == model1.to_obj()['flds']
+    assert Model.make_obj_flds(model1.flds) == model1.to_obj()['flds'] == obj_flds
     assert model1.to_obj()['flds'][1]['rtl'] is True
 
     # cloze
@@ -52,48 +68,45 @@ def test_model(tmpdir):
     assert Model.clozed(Model.gen_tmpls([p1.strpath, pc.strpath])) == ([('填空题', "{{cloze:正面}}", "{{背面}}")], True)
     assert Model.gen_tmpls([pc.strpath]) == [('填空题', "{{cloze:正面}}", "{{背面}}")]
     assert Model(Model.gen_tmpls([p1.strpath, pc.strpath]), ['正面']).tmpls == [('填空题', "{{cloze:正面}}", "{{背面}}")]
+    tmpl_txts = [['卡片1[default].txt',
+                  '{{正面}}\n<====================>\n<====================>\n{{背面}}'],
+                 ['卡片2[default].txt',
+                  '{{正面}}\n<====================>\n<====================>\n{{背面}}']]
+    assert Model.make_txt_tmpls(model1) == tmpl_txts
+    assert model1.to_tmpls_css_txt()[0] == tmpl_txts
+    assert model1.to_tmpls_css_txt()[1] == ["{}.css".format(model1.model_name), model1.css]
 
 
-def test_model_deck():
-    model = Model([('卡片1', "{{正面}}", "{{背面}}")], ['正面', '背面'], model_name="aaa")
-    deck = Deck('测试')
-    model_deck = ModelDeck([['a', 'b'], ['c', 'd']], model, deck)
-    txt = model_deck.to_csv_text()
-    model_deck1 = ModelDeck.from_csv_text(txt, [('卡片1', "{{正面}}", "{{背面}}")], csv_name="aaa[测试]")
-    assert model_deck == model_deck1
+def test_deck():
+    deck = Deck("测试")
+    assert deck == Deck.from_obj(deck.to_obj())
 
 
-def test_model_make_obj_flds():
-    model = Model([('卡片1', "{{正面}}", "{{背面}}")], ['正面', '背面'])
-    obj_flds = Model.make_obj_flds(model.flds)
-    assert obj_flds == [{'font': 'Arial',
-                         'media': [],
-                          'name': '正面',
-                          'ord': 0,
-                          'rtl': False,
-                          'size': 20,
-                          'sticky': False},
-                         {'font': 'Arial',
-                          'media': [],
-                          'name': '背面',
-                          'ord': 1,
-                          'rtl': False,
-                          'size': 20,
-                          'sticky': False}]
-    model = Model([('卡片1', "{{正面}}", "{{背面}}")], ['正面:rtl', '背面'])
-    obj_flds = Model.make_obj_flds(model.flds)
-    assert obj_flds == [{'font': 'Arial',
-                         'media': [],
-                         'name': '正面',
-                         'ord': 0,
-                         'rtl': True,
-                         'size': 20,
-                         'sticky': False},
-                        {'font': 'Arial',
-                         'media': [],
-                         'name': '背面',
-                         'ord': 1,
-                         'rtl': False,
-                         'size': 20,
-                         'sticky': False}]
+def test_model_deck(tmpdir):
+    # cloze
+    pc = tmpdir.join('填空题.txt')
+    pc.write_text(cloze_tmpl, encoding='utf8')
 
+    # from csv
+    model_deck = ModelDeck.from_csv_text(csv_text, Model.gen_tmpls([pc.strpath]), csv_name="填空题[测试]")
+    assert model_deck.model == Model(Model.gen_tmpls([pc.strpath]), ["正面", "背面:rtl"], model_name="填空题")
+    assert model_deck.deck == Deck("测试")
+    assert model_deck.has_tag is True
+    # to csv
+    assert ("填空题[测试].csv", csv_text) == model_deck.to_csv_text()
+
+    # to notes_cards
+    start = 100000
+    n_gen = itertools.count(start)
+    c_gen = itertools.count(start)
+    model_deck.model.mid = start
+    model_deck.deck.did = 1
+    notes_obj, cards_obj = model_deck.to_notes_cards_objs(n_gen, c_gen, start)
+    assert len(notes_obj) == len(cards_obj) - 1
+    assert cards_obj[3][3] == 0
+    assert cards_obj[4][3] == 2
+
+
+def test_collection():
+    # Collection.from_zip()
+    pass

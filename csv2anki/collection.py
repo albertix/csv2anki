@@ -198,7 +198,7 @@ class Model(Comparable):
         :return: [[[name, fmt] ...], css] name = tmpl_name[model_name].txt
         """
         tmpls = Model.make_txt_tmpls(self)
-        css = self.css
+        css = ["{}.css".format(self.model_name), self.css]
         return tmpls, css
 
     @staticmethod
@@ -279,7 +279,7 @@ class Deck(Comparable):
                 0
             ],
             "id": self.did,
-            "mod": self.did // 1000,
+            "mod": self.did // 1000 if self.did else 1,
             "desc": ""
         }
         return deck
@@ -319,7 +319,7 @@ class ModelDeck(object):
 
         return ModelDeck(notes, model, deck)
 
-    def to_csv_text(self):
+    def to_csv_text(self, name=True):
         txt = io.StringIO(newline=None)
         w = csv.writer(txt, dialect='excel-tab')
         if self.has_tag:
@@ -327,8 +327,15 @@ class ModelDeck(object):
         else:
             w.writerow(self.model.flds)
         w.writerows(self.notes)
-
-        return txt.getvalue()
+        if name is True:
+            return "{model_name}[{deck_name}].csv"\
+                .format(model_name=self.model.model_name,
+                        deck_name=self.deck.deck_name
+                        ), txt.getvalue()
+        elif isinstance(name, str):
+            return name, txt.getvalue()
+        else:
+            return "default.csv", txt.getvalue()
 
     @staticmethod
     def from_csv_text(csv_text, tmpls, csv_name='', css=None):
@@ -348,14 +355,15 @@ class ModelDeck(object):
             flds = next(reader)
 
             has_tag = False
-            if len(flds) > 1 and flds[-1] == 'tags':
+            len_flds = len(flds)
+            if len_flds > 1 and flds[-1] == 'tags':
                 flds = flds[:-1]
                 has_tag = True
 
             model = Model(tmpls=tmpls, flds=flds, css=css, model_name=model_name)
             deck = Deck(deck_name)
 
-            notes = list([note for note in reader])
+            notes = list([note[:len_flds] for note in reader])
 
         return ModelDeck(notes, model, deck, has_tag=has_tag)
 
@@ -417,10 +425,10 @@ class ModelDeck(object):
         return cards
 
     @staticmethod
-    def cloze_ords(flds):
-        flds = flds.split('\x1f')
+    def cloze_ords(note_flds):
+        note_flds = note_flds.split('\x1f')
         ords = set()
-        for fld in flds:
+        for fld in note_flds:
             for t_ord in re.findall('{{c(\d+)::.+?}}', fld):
                 ords.add(int(t_ord) - 1)
         if not ords:
@@ -515,22 +523,20 @@ class Collection(object):
     def to_files(self, dir_path):
         dir_path = os.path.abspath(dir_path)
         for model in self.models:
-            tmpls, css = model.to_tmpls_css_txt()
-            css_path = os.path.join(dir_path, "{}.css".format(model.model_name))
+            tmpls, (css_name, css_text) = model.to_tmpls_css_txt()
+            css_path = os.path.join(dir_path, css_name)
             with open(css_path, 'w', encoding='utf8') as f:
-                f.write(css)
+                f.write(css_text)
             for model_name, fmt in tmpls:
                 tmpl_path = os.path.join(dir_path, model_name)
                 with open(tmpl_path, 'w', encoding='utf8') as f:
                     f.write(fmt)
 
         for deck_model in self.model_decks:
-            csv_path = os.path.join(dir_path,
-                                    "{model_name}[{deck_name}].csv"
-                                    .format(model_name=deck_model.model.model_name,
-                                            deck_name=deck_model.deck.deck_name))
+            csv_name, csv_text = deck_model.to_csv_text()
+            csv_path = os.path.join(dir_path, csv_name)
             with open(csv_path, 'w', encoding='utf8') as f:
-                f.write(deck_model.to_csv_text())
+                f.write(csv_text)
 
     @staticmethod
     def from_files(model_files, media_files):
