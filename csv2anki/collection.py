@@ -97,12 +97,16 @@ class Model(Comparable):
     @staticmethod
     def clozed(tmpls):
         for i, tmpl in enumerate(tmpls):
-            if Model.is_cloze(tmpl[1]) and Model.is_cloze(tmpl[2]):
+            if Model.is_cloze(tmpl[1]) or Model.is_cloze(tmpl[2]):
                 return [tmpl], True
         return tmpls, False
 
     @staticmethod
     def gen_tmpls(tmpl_paths):
+        """
+        :param tmpl_paths: tmpl_name[model_name].csv => tmpl_name
+        :return: [[tmpl['name'], tmpl['qtmpl'], tmpl['atmpl']] ...]
+        """
 
         def b_name(path):
             temp_name = basename(path)
@@ -118,7 +122,7 @@ class Model(Comparable):
     def gen_tmpl(tmpl_text, tmpl_name):
         """
         :param tmpl_text:
-        :param tmpl_name:
+        :param tmpl_name: tmpl_name only, without tmpl_name'[model_name].csv'
         :return: tmpl['name'], tmpl['qtmpl'], tmpl['atmpl']
         """
         m = re.fullmatch(r'(.*)(\n[<]={10,}[>])\2\n(.*)',
@@ -131,24 +135,23 @@ class Model(Comparable):
         else:
             return tmpl_name, tmpl_text, ""
 
-    def __init__(self, tmpls, flds, is_cloze=None, css=None, model_name="default", has_tags=False):
+    def __init__(self, tmpls, flds, is_cloze=False, css=None, model_name="default"):
         """
+        
         :param tmpls: [(name, q_tmpl, a_tmpl), ...]
         :param flds: [fld ...]
         :param is_cloze: False as Default
         :param css: CSS
         :param model_name: default as Default
-        :param has_tags: True as Default
         """
 
-        if is_cloze is None:
+        if not is_cloze:
             tmpls, is_cloze = Model.clozed(tmpls)
         self.tmpls = tmpls
         self.flds = flds
         self.is_cloze = is_cloze
         self.css = css if css else Model.CSS
         self.model_name = model_name
-        self.has_tags = has_tags
         self.mid = None
 
     @staticmethod
@@ -285,10 +288,11 @@ class Deck(Comparable):
 class ModelDeck(object):
     __fields__ = ['notes', 'model', 'deck']
 
-    def __init__(self, notes, model, deck):
+    def __init__(self, notes, model, deck, has_tag=False):
         self.notes = notes
         self.model = model
         self.deck = deck
+        self.has_tag = has_tag
 
     def __eq__(self, other):
         if isinstance(other, type(self)):
@@ -318,7 +322,7 @@ class ModelDeck(object):
     def to_csv_text(self):
         txt = io.StringIO(newline=None)
         w = csv.writer(txt, dialect='excel-tab')
-        if self.model.has_tags:
+        if self.has_tag:
             w.writerow(self.model.flds + ['tags'])
         else:
             w.writerow(self.model.flds)
@@ -343,17 +347,17 @@ class ModelDeck(object):
             reader = csv.reader(f, dialect='excel-tab')
             flds = next(reader)
 
-            has_tags = False
+            has_tag = False
             if len(flds) > 1 and flds[-1] == 'tags':
                 flds = flds[:-1]
-                has_tags = True
+                has_tag = True
 
-            model = Model(tmpls=tmpls, flds=flds, css=css, model_name=model_name, has_tags=has_tags)
+            model = Model(tmpls=tmpls, flds=flds, css=css, model_name=model_name)
             deck = Deck(deck_name)
 
             notes = list([note for note in reader])
 
-        return ModelDeck(notes, model, deck)
+        return ModelDeck(notes, model, deck, has_tag=has_tag)
 
     @staticmethod
     def make_obj_note(note, tags, mid, nid_gen):
@@ -424,7 +428,7 @@ class ModelDeck(object):
         return ords
 
     def to_notes_cards_objs(self, nid_gen, cid_gen, cid_start):
-        if self.model.has_tags:
+        if self.has_tag:
             notes = [ModelDeck.make_obj_note(note[:-1], note[-1], self.model.mid, nid_gen)
                      for note in self.notes]
         else:
