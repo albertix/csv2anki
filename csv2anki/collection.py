@@ -5,6 +5,7 @@ import io
 import json
 import os
 import re
+import shutil
 import string
 import zipfile
 import tempfile
@@ -307,16 +308,16 @@ class ModelDeck(object):
         model = Model.from_obj(col_models_decks_obj[0][str(mid)])
         deck = Deck.from_obj(col_models_decks_obj[1][str(did)])
 
-        with conn.cursor() as cursor:
-            note_objs = cursor.execute('SELECT notes.flds, notes.tags FROM cards, notes'
-                                       ' WHERE cards.nid = notes.id '
-                                       '        and notes.mid = ? '
-                                       '        and cards.did = ?',
-                                       (mid, did)).fetchall()
+        cursor = conn.cursor()
+        note_objs = cursor.execute('SELECT DISTINCT notes.flds, notes.tags FROM cards, notes'
+                                   ' WHERE cards.nid = notes.id '
+                                   '        and notes.mid = ? '
+                                   '        and cards.did = ?',
+                                   (mid, did)).fetchall()
 
-            notes = list(note_obj[0].split('\x1f') + [note_objs[1]]
-                         for note_obj in note_objs)
-
+        notes = list(note_obj[0].split('\x1f') + [note_obj[1]]
+                     for note_obj in note_objs)
+        cursor.close()
         return ModelDeck(notes, model, deck)
 
     def to_csv_text(self, name=True):
@@ -520,8 +521,15 @@ class Collection(object):
             'timer': 0,
             'usn': 0}}
 
+    @staticmethod
+    def make_media_file(file_path, dir_path, i):
+        shutil.copy(file_path, os.path.join(dir_path, "{}".format(i)))
+
     def to_files(self, dir_path):
         dir_path = os.path.abspath(dir_path)
+        if not os.path.isdir(dir_path):
+            os.mkdir(dir_path)
+
         for model in self.models:
             tmpls, (css_name, css_text) = model.to_tmpls_css_txt()
             css_path = os.path.join(dir_path, css_name)
@@ -538,13 +546,34 @@ class Collection(object):
             with open(csv_path, 'w', encoding='utf8') as f:
                 f.write(csv_text)
 
+        media_dir = os.path.join(dir_path, 'media')
+        if not os.path.isdir(media_dir):
+            os.mkdir(media_dir)
+
+        media_file = set()
+        for f_type, file_path in self.media_files:
+            if f_type == 'file':
+                file_name = os.path.basename(file_path)
+                if file_name not in media_file:
+                    media_file.add(file_name)
+                    shutil.copy(file_path, os.path.join(media_dir, file_name))
+            elif f_type == 'anki':
+                with zipfile.ZipFile(file_path) as anki_zip:
+                    with anki_zip.open("media") as sub_media:
+                        sub_media_obj = json.loads(sub_media.read())
+                    for i, imedia in sub_media_obj.items():
+                        if imedia not in media_file:
+                            media_file.add(imedia)
+                            anki_zip.extract(i, os.path.join(media_dir, imedia))
+
     @staticmethod
     def from_files(model_files, media_files):
         """
         :param model_files: [[csv_files, tmpl_files, css_file], ...]
-                csv_files  ( model_name[deck_name].csv ...)
-                tmpl_files ( tmpl_name.txt ...)
-        :param media_files: [meida_file_path | anki.apkg, ...]
+                               csv_files  ( model_name[deck_name].csv ...)
+                               tmpl_files ( tmpl_name.txt ...)
+        :param media_files: [[type, meida_file_path | anki.apkg], ...]
+                               type: file | anki
         :return:
         """
         model_decks = []
@@ -575,6 +604,7 @@ class Collection(object):
         # debug.append([conn, col_models_decks_obj, mid_dids])
         model_decks = [ModelDeck.from_db(conn, mid, did, col_models_decks_obj)
                        for mid, did in mid_dids]
+        cursor.close()
         return list(model_decks)
 
     @staticmethod
@@ -586,8 +616,9 @@ class Collection(object):
                     f.write(col_file.read())
             with sqlite3.connect(f.name) as dbconn:
                 model_decks = Collection.gen_model_decks_from_db(dbconn)
+            dbconn.close()
         os.remove(f.name)
-        return Collection(model_decks, None)
+        return Collection(model_decks, ['anki', path])
 
     @property
     def models(self):
@@ -675,12 +706,7 @@ class Collection(object):
         if os.path.isdir(z_path):
             z_path = os.path.join(z_path, 'default.apkg')
 
-        media = {}
         with zipfile.ZipFile(z_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-            for i, media_file in enumerate(self.media_files):
-                zf.write(media_file, arcname=i)
-                media[str(i)] = os.path.basename(media_file)
-            zf.writestr('media', json.dumps(media))
 
             with tempfile.NamedTemporaryFile(delete=False) as f:
                 # db_path = os.path.join(test_db_path, 'collection.anki2')
@@ -692,4 +718,27 @@ class Collection(object):
 
                 zf.write(db_path, arcname='collection.anki2')
 
+            media_file = set()
+            media_dict = {}
+            media_gen = itertools.count(0)
+            for f_type, file_path in self.media_files:
+                if f_type == 'file':
+                    file_name = os.path.basename(file_path)
+                    if file_name not in media_file:
+                        i = next(media_gen)
+                        media_file.add(file_name)
+                        media_dict[str(i)] = file_name
+                        zf.write(file_path, arcname=str(i))
+                elif f_type == 'anki':
+                    with zipfile.ZipFile(file_path) as anki_zip:
+                        with anki_zip.open("media") as sub_media:
+                            sub_media_obj = json.loads(sub_media.read())
+                        for i, imedia in sub_media_obj.items():
+                            if imedia not in media_file:
+                                i = next(media_gen)
+                                media_file.add(imedia)
+                                media_dict[str(i)] = imedia
+                                with anki_zip.open(i) as sub_media_file:
+                                    zf.write(sub_media_file.read(), arcname=str(i))
+            zf.writestr('media', json.dumps(media_dict))
             os.remove(f.name)
