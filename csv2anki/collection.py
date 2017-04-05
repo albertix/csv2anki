@@ -34,6 +34,11 @@ def basename(path):
     return b_name
 
 
+def model_name_info(name):
+    model_name, _, other_name = re.findall('^(.*?)(\[(.*)\])?$', name)[0]
+    return model_name, other_name
+
+
 def detect(txt_b, step=1):
     detector = chardet.universaldetector.UniversalDetector()
     for line in txt_b.splitlines()[::step]:
@@ -128,14 +133,15 @@ class Model(Comparable):
     @staticmethod
     def gen_tmpls(tmpl_paths):
         """
-        :param tmpl_paths: tmpl_name[model_name].csv => tmpl_name
+        :param tmpl_paths: model_name[tmpl_name].txt => tmpl_name
         :return: [[tmpl['name'], tmpl['qtmpl'], tmpl['atmpl']] ...]
         """
 
         def b_name(path):
-            temp_name = basename(path)
-            i = temp_name.rfind('[')
-            return temp_name if i == -1 or i == 0 else temp_name[:i]
+            name = basename(path)
+            model_name, tmpl_name = model_name_info(name)
+            tmpl_name = tmpl_name if tmpl_name else name
+            return tmpl_name
 
         tmpls = [Model.gen_tmpl(text(tmpl_path),
                                 b_name(tmpl_path))
@@ -146,7 +152,7 @@ class Model(Comparable):
     def gen_tmpl(tmpl_text, tmpl_name):
         """
         :param tmpl_text:
-        :param tmpl_name: tmpl_name only, without tmpl_name'[model_name].csv'
+        :param tmpl_name: tmpl_name only, without tmpl_name'[model_name].txt'
         :return: tmpl['name'], tmpl['qtmpl'], tmpl['atmpl']
         """
         m = re.fullmatch(r'(.*)(\n[<]={10,}[>])\2\n(.*)',
@@ -210,8 +216,8 @@ class Model(Comparable):
         """
         tmpls = []
         for tmpl_name, qfmt, afmt in model.tmpls:
-            name = "{tmpl_name}[{model_name}].txt".\
-                format(tmpl_name=tmpl_name, model_name=model.model_name)
+            name = "{model_name}[{tmpl_name}].txt".\
+                format(model_name=model.model_name, tmpl_name=tmpl_name)
             fmt = """{qfmt}\n<====================>\n<====================>\n{afmt}"""\
                 .format(qfmt=qfmt, afmt=afmt)
             tmpls.append([name, fmt])
@@ -370,7 +376,7 @@ class ModelDeck(object):
         :param css: 
         :return: 
         """
-        model_name, _, deck_name = re.findall('^(.*?)(\[(.*)\])?$', csv_name)[0]
+        model_name, deck_name = model_name_info(csv_name)
         model_name = model_name if model_name else 'default'
         deck_name = deck_name if deck_name else 'default'
 
@@ -484,9 +490,9 @@ class ModelDeck(object):
 
 
 class Collection(object):
-    __all__ = tuple(('id', 'crt', 'mod', 'scm', 'ver',
-                     'dty', 'usn', 'ls', 'conf', 'models',
-                     'decks', 'dconf', 'tags'))
+    __fields__ = ['id', 'crt', 'mod', 'scm', 'ver',
+                  'dty', 'usn', 'ls', 'conf', 'models',
+                  'decks', 'dconf', 'tags']
 
     def __init__(self, model_decks, media_files):
         self.model_decks = model_decks if model_decks else []
@@ -587,7 +593,67 @@ class Collection(object):
                     for i, imedia in sub_media_obj.items():
                         if imedia not in media_file:
                             media_file.add(imedia)
-                            anki_zip.extract(i, os.path.join(media_dir, imedia))
+                            with open(os.path.join(media_dir, imedia), 'wb') as f:
+                                f.write(anki_zip.read(i))
+
+    @staticmethod
+    def from_dir(dir_path):
+        dir_path = os.path.abspath(dir_path)
+        media_path = os.path.join(dir_path, "media")
+        media_files = []
+        if os.path.isdir(media_path):
+            media_files = [('file', os.path.join(media_path, file))
+                           for file in os.listdir(media_path)]
+
+        files = os.listdir(dir_path)
+
+        csv_files = [file for file in files if file.endswith('.csv')]
+        tmpl_files = [file for file in files if file.endswith('.txt')]
+        css_files = [file for file in files if file.endswith('.css')]
+
+        models = {}
+
+        for csv_name in csv_files:
+            short_name = basename(csv_name)
+            model_name, other_info = model_name_info(short_name)
+            model_name = model_name if model_name else short_name
+
+            model_info = models.get(model_name)
+            if model_info is None:
+                model_info = {'csv': set(), 'tmpl': set(), 'css': None}
+                models[model_name] = model_info
+
+            model_info['csv'].add(os.path.join(dir_path, csv_name))
+
+        for tmpl_name in tmpl_files:
+            short_name = basename(tmpl_name)
+            model_name, other_info = model_name_info(short_name)
+            model_name = model_name if model_name else short_name
+
+            model_info = models.get(model_name)
+            if model_info is None:
+                continue
+
+            model_info['tmpl'].add(os.path.join(dir_path, tmpl_name))
+
+        for css_name in css_files:
+            model_name = basename(css_name)
+
+            model_info = models.get(model_name)
+            if model_info is None or (not css_name):
+                continue
+
+            model_info['css'] = os.path.join(dir_path, css_name)
+
+        model_files = list([
+                               list(model_files['csv']),
+                               list(model_files['tmpl']),
+                               model_files['css']
+                           ] for model_files
+                           in models.values()
+                           if model_files['csv'] and model_files['tmpl'])
+
+        return Collection.from_files(model_files, media_files)
 
     @staticmethod
     def from_files(model_files, media_files):
@@ -641,7 +707,7 @@ class Collection(object):
                 model_decks = Collection.gen_model_decks_from_db(dbconn)
             dbconn.close()
         os.remove(f.name)
-        return Collection(model_decks, ['anki', path])
+        return Collection(model_decks, [['anki', path]])
 
     @property
     def models(self):
