@@ -625,13 +625,16 @@ class Collection(object):
 
             model_info['csv'].add(os.path.join(dir_path, csv_name))
 
+        un_linked = set()
         for tmpl_name in tmpl_files:
             short_name = basename(tmpl_name)
             model_name, other_info = model_name_info(short_name)
-            model_name = model_name if model_name else short_name
+            model_name = model_name if other_info else "default"
+            print('aaa', model_name, 'info', other_info)
 
             model_info = models.get(model_name)
             if model_info is None:
+                un_linked.add(os.path.join(dir_path, tmpl_name))
                 continue
 
             model_info['tmpl'].add(os.path.join(dir_path, tmpl_name))
@@ -645,6 +648,14 @@ class Collection(object):
 
             model_info['css'] = os.path.join(dir_path, css_name)
 
+        # 未包含 model_name 的 tmpl
+        if len(models) == 1:
+            m = next(iter(models.values()))
+            if not m['tmpl']:
+                m['tmpl'].update(un_linked)
+
+        print(models)
+        print(un_linked)
         model_files = list([
                                list(model_files['csv']),
                                list(model_files['tmpl']),
