@@ -15,6 +15,8 @@ import itertools
 
 import sqlite3
 
+import chardet.universaldetector
+
 from csv2anki.db import create_db
 
 debug = None
@@ -32,14 +34,33 @@ def basename(path):
     return b_name
 
 
+def detect(txt_b, step=1):
+    detector = chardet.universaldetector.UniversalDetector()
+    for line in txt_b.splitlines()[::step]:
+        detector.feed(line)
+        if detector.result and detector.result['confidence'] >= 0.8:
+            break
+        elif detector.done:
+            break
+    detector.close()
+    return detector.result['encoding']
+
+
 def text(text_path):
     text_path = os.path.abspath(text_path)
     txt = ''
     if os.path.isfile(text_path):
-        with open(text_path, 'r', encoding='utf8') as f:
-            txt = f.read()
-        if txt[0] == '\ufeff':
-            txt = txt[1:]
+        with open(text_path, 'rb') as f:
+            txt_b = f.read()
+        txt_io = None
+        try:
+            txt_io = io.TextIOWrapper(io.BufferedReader(io.BytesIO(txt_b)), encoding=detect(txt_b, step=100))
+            txt = txt_io.read()
+        except UnicodeDecodeError:
+            txt_io = io.TextIOWrapper(io.BufferedReader(io.BytesIO(txt_b)), encoding=detect(txt_b))
+            txt = txt_io.read()
+        finally:
+            txt_io.close()
     return txt
 
 
