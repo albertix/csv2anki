@@ -633,7 +633,7 @@ class Collection(object):
             print('aaa', model_name, 'info', other_info)
 
             model_info = models.get(model_name)
-            if model_info is None:
+            if model_info is None and model_name == "default":
                 un_linked.add(os.path.join(dir_path, tmpl_name))
                 continue
 
@@ -648,7 +648,7 @@ class Collection(object):
 
             model_info['css'] = os.path.join(dir_path, css_name)
 
-        # 未包含 model_name 的 tmpl
+        # 仅有一个model的牌组，若不存在tmpl，将未链接model的tmpl与其链接。
         if len(models) == 1:
             m = next(iter(models.values()))
             if not m['tmpl']:
