@@ -38,6 +38,8 @@ def text(text_path):
     if os.path.isfile(text_path):
         with open(text_path, 'r', encoding='utf8') as f:
             txt = f.read()
+        if txt[0] == '\ufeff':
+            txt = txt[1:]
     return txt
 
 
