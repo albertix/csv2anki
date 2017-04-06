@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+# Copyright: Albertix <albertix@live.com>
+# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
 import copy
 import csv
 import hashlib
@@ -42,7 +46,7 @@ def model_name_info(name):
 def detect(txt_b, step=1):
     detector = chardet.universaldetector.UniversalDetector()
     lines = txt_b.splitlines()
-    for line in lines[:10] + lines[10::step]:
+    for line in lines[::step]:
         detector.feed(line)
         if detector.result and detector.result['confidence'] >= 0.8:
             break
@@ -122,7 +126,7 @@ class Model(Comparable):
 
     @staticmethod
     def is_cloze(tmpl_text):
-        return True if re.match('{{cloze:[^}]+}}', tmpl_text) else False
+        return True if re.match('{{(type:)?cloze:[^}]+}}', tmpl_text) else False
 
     @staticmethod
     def clozed(tmpls):
@@ -631,7 +635,6 @@ class Collection(object):
             short_name = basename(tmpl_name)
             model_name, other_info = model_name_info(short_name)
             model_name = model_name if other_info else "default"
-            print('aaa', model_name, 'info', other_info)
 
             model_info = models.get(model_name)
             if model_info is None and model_name == "default":
@@ -655,8 +658,6 @@ class Collection(object):
             if not m['tmpl']:
                 m['tmpl'].update(un_linked)
 
-        print(models)
-        print(un_linked)
         model_files = list([
                                list(model_files['csv']),
                                list(model_files['tmpl']),
@@ -800,8 +801,7 @@ class Collection(object):
         # self.debug = [decks, models, model_decks]
         return col, all_notes, all_cards
 
-    def to_zip(self, z_file):
-
+    def to_zip(self, z_file="default"):
         z_file = z_file if z_file.endswith('.apkg') else "{}.apkg".format(z_file)
         z_path = os.path.abspath(z_file)
         if os.path.isdir(z_path):
@@ -812,7 +812,6 @@ class Collection(object):
             with tempfile.NamedTemporaryFile(delete=False) as f:
                 # db_path = os.path.join(test_db_path, 'collection.anki2')
                 db_path = f.name
-                print(db_path)
                 # gen db write to db_path
                 col, notes, cards = self.info()
                 create_db(col, notes, cards, db_path)
