@@ -104,6 +104,15 @@ def format_model(argv):
     return csv, tmpl, css
 
 
+def singleton_dir(dir_path):
+    dir_path = os.path.abspath(dir_path)
+    if os.path.isdir(dir_path):
+        files = [file for file in os.listdir(dir_path) if os.path.isfile(os.path.join(dir_path, file))]
+        meida_path = os.path.join(dir_path, 'media')
+        if not os.path.isdir(m_media_path):
+            meida_path = None
+
+
 if __name__ == '__main__':
     m_model_decks, m_ankis, m_taget, m_extract, m_media_path = split_argv(sys.argv[1:])
     col = Collection.from_files(m_model_decks, m_media_path)

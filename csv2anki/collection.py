@@ -36,7 +36,8 @@ def basename(path):
 
 def detect(txt_b, step=1):
     detector = chardet.universaldetector.UniversalDetector()
-    for line in txt_b.splitlines()[::step]:
+    lines = txt_b.splitlines()
+    for line in lines[:10] + lines[10::step]:
         detector.feed(line)
         if detector.result and detector.result['confidence'] >= 0.8:
             break

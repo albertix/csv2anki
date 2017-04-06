@@ -110,3 +110,4 @@ def test_model_deck(tmpdir):
 def test_collection():
     # Collection.from_zip()
     col = Collection.from_zip('tests/all.apkg')
+
