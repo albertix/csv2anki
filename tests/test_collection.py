@@ -2,6 +2,8 @@
 # Copyright: Albertix <albertix@live.com>
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import click
+from click.testing import CliRunner
 import itertools
 import pytest
 from csv2anki.collection import Collection, Model, ModelDeck, Deck, text
@@ -113,5 +115,13 @@ def test_model_deck(tmpdir):
 
 def test_collection():
     # Collection.from_zip()
-    col = Collection.from_zip('tests/all.apkg')
+    pass
 
+
+def test_cli():
+    from csv2anki import cli
+    runner = CliRunner()
+    result = runner.invoke(cli.cli, ['package',
+                                     '-s', 'test_files/files_with_media',
+                                     '-d', 'test_files/files_with_media.apkg'])
+    print(result)

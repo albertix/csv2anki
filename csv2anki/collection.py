@@ -13,7 +13,7 @@ import shutil
 import string
 import zipfile
 import tempfile
-import logging
+# import logging
 import datetime
 import itertools
 
@@ -48,7 +48,7 @@ def detect(txt_b, step=1):
     lines = txt_b.splitlines()
     for line in lines[::step]:
         detector.feed(line)
-        if detector.result and detector.result['confidence'] >= 0.8:
+        if detector.result and detector.result['confidence'] >= 0.95:
             break
         elif detector.done:
             break
@@ -56,21 +56,28 @@ def detect(txt_b, step=1):
     return detector.result['encoding']
 
 
-def text(text_path):
+def text(text_path, encoding=None):
     text_path = os.path.abspath(text_path)
     txt = ''
     if os.path.isfile(text_path):
         with open(text_path, 'rb') as f:
             txt_b = f.read()
         txt_io = None
-        try:
-            txt_io = io.TextIOWrapper(io.BufferedReader(io.BytesIO(txt_b)), encoding=detect(txt_b, step=100))
-            txt = txt_io.read()
-        except UnicodeDecodeError:
-            txt_io = io.TextIOWrapper(io.BufferedReader(io.BytesIO(txt_b)), encoding=detect(txt_b))
-            txt = txt_io.read()
-        finally:
-            txt_io.close()
+        if not encoding:
+            try:
+                txt_io = io.TextIOWrapper(io.BufferedReader(io.BytesIO(txt_b)), encoding=detect(txt_b, step=2))
+                txt = txt_io.read()
+            except UnicodeDecodeError:
+                txt_io = io.TextIOWrapper(io.BufferedReader(io.BytesIO(txt_b)), encoding=detect(txt_b))
+                txt = txt_io.read()
+            finally:
+                txt_io.close()
+        else:
+            with io.TextIOWrapper(io.BufferedReader(io.BytesIO(txt_b)), encoding=encoding) as txt_io:
+                txt = txt_io.read()
+
+        if (txt + " ")[0] == '\ufeff':
+            txt = txt[1:]
     return txt
 
 
@@ -559,7 +566,7 @@ class Collection(object):
     def make_media_file(file_path, dir_path, i):
         shutil.copy(file_path, os.path.join(dir_path, "{}".format(i)))
 
-    def to_files(self, dir_path):
+    def to_files(self, dir_path, encoding='utf8'):
         dir_path = os.path.abspath(dir_path)
         if not os.path.isdir(dir_path):
             os.mkdir(dir_path)
@@ -567,17 +574,17 @@ class Collection(object):
         for model in self.models:
             tmpls, (css_name, css_text) = model.to_tmpls_css_txt()
             css_path = os.path.join(dir_path, css_name)
-            with open(css_path, 'w', encoding='utf8') as f:
+            with open(css_path, 'w', encoding=encoding) as f:
                 f.write(css_text)
             for model_name, fmt in tmpls:
                 tmpl_path = os.path.join(dir_path, model_name)
-                with open(tmpl_path, 'w', encoding='utf8') as f:
+                with open(tmpl_path, 'w', encoding=encoding) as f:
                     f.write(fmt)
 
         for deck_model in self.model_decks:
             csv_name, csv_text = deck_model.to_csv_text()
             csv_path = os.path.join(dir_path, csv_name)
-            with open(csv_path, 'w', encoding='utf8') as f:
+            with open(csv_path, 'w', encoding=encoding) as f:
                 f.write(csv_text)
 
         media_dir = os.path.join(dir_path, 'media')
