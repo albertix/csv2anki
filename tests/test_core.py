@@ -68,9 +68,9 @@ def test_model(tmpdir):
     assert Model.clozed(Model.gen_tmpls([p1.strpath, pc.strpath])) == ([('填空题', "{{cloze:正面}}", "{{背面}}")], True)
     assert Model.gen_tmpls([pc.strpath]) == [('填空题', "{{cloze:正面}}", "{{背面}}")]
     assert Model(Model.gen_tmpls([p1.strpath, pc.strpath]), ['正面']).tmpls == [('填空题', "{{cloze:正面}}", "{{背面}}")]
-    tmpl_txts = [['卡片1[default].txt',
+    tmpl_txts = [['default[卡片1].txt',
                   '{{正面}}\n<====================>\n<====================>\n{{背面}}'],
-                 ['卡片2[default].txt',
+                 ['default[卡片2].txt',
                   '{{正面}}\n<====================>\n<====================>\n{{背面}}']]
     assert Model.make_txt_tmpls(model1) == tmpl_txts
     assert model1.to_tmpls_css_txt()[0] == tmpl_txts
