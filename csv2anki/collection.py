@@ -359,7 +359,7 @@ class ModelDeck(object):
         notes = list(note_obj[0].split('\x1f') + [note_obj[1]]
                      for note_obj in note_objs)
         cursor.close()
-        return ModelDeck(notes, model, deck)
+        return ModelDeck(notes, model, deck, has_tag=True)
 
     def to_csv_text(self, name=True):
         txt = io.StringIO(newline=None)
