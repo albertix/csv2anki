@@ -19,7 +19,8 @@ def build():
 
 @cli.command()
 def upload():
-    subprocess.call(['twine', 'upload', 'dist/*'])
+    print(' '.join(['twine', 'upload', 'dist/*']))
+    # subprocess.call(['twine', 'upload', 'dist/*'])
 
 
 if __name__ == '__main__':
