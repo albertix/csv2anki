@@ -3,6 +3,10 @@ csv2anki
 ========
 Anki decks generator
 
+install
+-------
+> pip install csv2anki
+
 usage
 -----
 >  csv2anki package src_dir [dest.apkg]
