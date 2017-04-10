@@ -118,10 +118,10 @@ def test_collection():
     pass
 
 
-def test_cli():
-    from csv2anki import cli
-    runner = CliRunner()
-    result = runner.invoke(cli.cli, ['package',
-                                     '-s', 'test_files/files_with_media',
-                                     '-d', 'test_files/files_with_media.apkg'])
-    print(result)
+# def test_cli():
+#     from csv2anki import cli
+#     runner = CliRunner()
+#     result = runner.invoke(cli.cli, ['package',
+#                                      'test_files/files_with_media',
+#                                      'test_files/files_with_media.apkg'])
+#     print(result)
