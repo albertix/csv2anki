@@ -14,8 +14,7 @@ def clean():
 
 @cli.command()
 def build():
-    subprocess.call(['python', 'setup.py', 'sdist', 'build'])
-    subprocess.call(['python', 'setup.py', 'bdist_wheel'])
+    subprocess.call(['python', 'setup.py', 'sdist', 'bdist_wheel'])
 
 
 @cli.command()
