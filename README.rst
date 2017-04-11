@@ -1,6 +1,8 @@
 ========
 csv2anki
 ========
+|icon|
+
 Anki decks generator
 
 install
@@ -17,3 +19,7 @@ more detail
 
 >  csv2anki [command] --help
 
+
+
+
+.. |icon| image:: https://travis-ci.org/albertix/csv2anki.svg?branch=master
