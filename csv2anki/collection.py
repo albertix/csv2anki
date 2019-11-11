@@ -16,7 +16,7 @@ import tempfile
 # import logging
 import datetime
 import itertools
-
+import platform
 import sqlite3
 
 import chardet.universaldetector
@@ -39,6 +39,8 @@ def basename(path):
 
 
 def model_name_info(name):
+    if platform.system() == 'Windows':
+        name=name.replace('：：','::')
     model_name, _, other_name = re.findall('^(.*?)(\[(.*)\])?$', name)[0]
     return model_name, other_name
 
@@ -583,6 +585,8 @@ class Collection(object):
 
         for deck_model in self.model_decks:
             csv_name, csv_text = deck_model.to_csv_text()
+            if platform.system() == 'Windows':
+                csv_path=csv_path.replace('::', '：：')
             csv_path = os.path.join(dir_path, csv_name)
             with open(csv_path, 'w', encoding=encoding) as f:
                 f.write(csv_text)
